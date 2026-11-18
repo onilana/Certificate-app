@@ -28,7 +28,10 @@ DEFAULT_CONFIG = {
     "last_sl_number": 1,
     "theme": "light",
     "output_dir": DEFAULT_OUTPUT_DIR,
-    "admin_password": "1234"
+    "admin_password": "1234",
+    "auto_check_updates": True,
+    "update_url": "https://raw.githubusercontent.com/MountEverestHSS/CertificateStudio/main/version.json",
+    "update_network_folder": ""
 }
 
 def load_config():

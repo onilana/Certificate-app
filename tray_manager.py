@@ -125,6 +125,8 @@ class SysTrayManager:
                 self.app.after(10, open_output_folder)
             elif cmd == 1003:
                 self.app.after(10, self.app._open_admin_portal)
+            elif cmd == 1006:
+                self.app.after(10, self.app.open_updates_dialog)
             elif cmd == 1004:
                 self.app.after(10, self.app.minimize_to_tray)
             elif cmd == 1005:
@@ -146,6 +148,7 @@ class SysTrayManager:
         win32gui.AppendMenu(menu, win32con.MF_STRING, 1001, "🎓 Certificate Studio")
         win32gui.AppendMenu(menu, win32con.MF_STRING, 1002, "📂 Open Output Folder")
         win32gui.AppendMenu(menu, win32con.MF_STRING, 1003, "🛠️ Admin Alignment Portal")
+        win32gui.AppendMenu(menu, win32con.MF_STRING, 1006, "🔄 Check for Updates...")
         win32gui.AppendMenu(menu, win32con.MF_SEPARATOR, 0, "")
         win32gui.AppendMenu(menu, win32con.MF_STRING, 1004, "📥 Minimize to Tray")
         win32gui.AppendMenu(menu, win32con.MF_STRING, 1005, "❌ Exit Application")

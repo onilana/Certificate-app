@@ -22,5 +22,8 @@
     "theme": "light",
     "output_dir": "D:\\Certificate app\\Output_Certificates",
     "admin_password": "1234",
-    "sl_prefix": "MEHSS/2026/"
+    "sl_prefix": "MEHSS/2026/",
+    "auto_check_updates": true,
+    "update_url": "https://raw.githubusercontent.com/MountEverestHSS/CertificateStudio/main/version.json",
+    "update_network_folder": ""
 }

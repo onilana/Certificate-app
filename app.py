@@ -22,6 +22,8 @@ from printer import (
 from batch_processor import read_batch_file, create_sample_files
 from tray_manager import SysTrayManager
 from path_utils import get_asset_path, get_base_dir
+from version import APP_VERSION, APP_NAME
+import updater
 
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
@@ -105,6 +107,9 @@ class CertificateApp(ctk.CTk):
         self.protocol("WM_DELETE_WINDOW", self.on_window_close)
 
         self.after(100, self._initial_setup)
+        self.latest_update_info = None
+        if self.config.get("auto_check_updates", True):
+            self.after(3000, self._background_check_updates)
 
     def _hide_launcher_console(self):
         """Hides the launch console/cmd window once the GUI is starting up."""
@@ -239,6 +244,18 @@ class CertificateApp(ctk.CTk):
             command=self._toggle_theme
         )
         self.theme_btn.pack(side="left", padx=(0, 4))
+
+        # Check for updates / current version button
+        self.update_btn = ctk.CTkButton(
+            right_box,
+            text=f"🔄 v{APP_VERSION}",
+            width=90,
+            height=28,
+            fg_color=("#1E293B", "#334155"),
+            hover_color=("#334155", "#475569"),
+            command=self.open_updates_dialog
+        )
+        self.update_btn.pack(side="left", padx=(0, 4))
 
         # Tray button to minimize to Windows System Tray
         ctk.CTkButton(
@@ -2332,6 +2349,45 @@ class CertificateApp(ctk.CTk):
             text_color=("#334155", "#CBD5E1")
         ).pack(anchor="w", padx=15, pady=8)
 
+        # Software Updates & Multi-Computer Distribution Box
+        upd_box = ctk.CTkFrame(right_box, fg_color=("#E2E8F0", "#1E293B"), corner_radius=6)
+        upd_box.pack(fill="x", padx=15, pady=(10, 10))
+
+        ctk.CTkLabel(
+            upd_box,
+            text=f"📦 Software Updates & Distribution (Current: v{APP_VERSION})",
+            font=ctk.CTkFont(size=13, weight="bold")
+        ).pack(anchor="w", padx=12, pady=(10, 4))
+
+        ctk.CTkLabel(
+            upd_box,
+            text="Distribute software updates to other school computers via Network Shared Folder,\nUSB drive (.zip), or online without re-installing.",
+            font=ctk.CTkFont(size=11),
+            text_color=("#64748B", "#94A3B8"),
+            justify="left"
+        ).pack(anchor="w", padx=12, pady=(0, 8))
+
+        btn_row_upd = ctk.CTkFrame(upd_box, fg_color="transparent")
+        btn_row_upd.pack(fill="x", padx=12, pady=(0, 10))
+
+        ctk.CTkButton(
+            btn_row_upd,
+            text="🔄 Check / Manage Updates",
+            height=32,
+            fg_color="#2563EB",
+            hover_color="#1D4ED8",
+            command=self.open_updates_dialog
+        ).pack(side="left", padx=(0, 8))
+
+        ctk.CTkButton(
+            btn_row_upd,
+            text="📦 Create Update Package (.zip)",
+            height=32,
+            fg_color="#059669",
+            hover_color="#047857",
+            command=self._open_create_update_dialog
+        ).pack(side="left", padx=(0, 8))
+
     def _on_calib_paper_change(self, val):
         self._on_paper_size_select(val)
 
@@ -3392,6 +3448,405 @@ class CertificateApp(ctk.CTk):
                 open_pdf(out_pdf)
         else:
             open_pdf(out_pdf)
+
+    # =========================================================================
+    # SOFTWARE UPDATES & VERSION CONTROL
+    # =========================================================================
+    def _background_check_updates(self):
+        """Silently checks for updates in background thread on startup."""
+        import threading
+        def worker():
+            try:
+                res = updater.check_for_updates(self.config)
+                if res and res.get('has_update'):
+                    self.latest_update_info = res
+                    self.after(0, lambda: self._on_update_found(res))
+            except Exception:
+                pass
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
+
+    def _on_update_found(self, res):
+        """Updates the header updates button to notify user of a newer version."""
+        if hasattr(self, 'update_btn') and self.update_btn:
+            self.update_btn.configure(
+                text=f"🚀 v{res['new_version']} Available!",
+                fg_color="#D97706",
+                hover_color="#B45309"
+            )
+
+    def open_updates_dialog(self):
+        """Opens a modern modal dialog to check, download, or install updates."""
+        win = ctk.CTkToplevel(self)
+        win.title("Software Updates & Versions")
+        win.geometry("640x630")
+        win.minsize(580, 560)
+        win.transient(self)
+        win.grab_set()
+
+        ico_file = get_asset_path("assets", "app_icon.ico")
+        if os.path.exists(ico_file):
+            try: win.iconbitmap(ico_file)
+            except Exception: pass
+
+        # Header banner
+        hdr = ctk.CTkFrame(win, fg_color=("#1B365D", "#0F1E33"), corner_radius=0, height=60)
+        hdr.pack(fill="x")
+        ctk.CTkLabel(
+            hdr,
+            text=f"🎓 {APP_NAME}",
+            font=ctk.CTkFont(family="Times New Roman", size=14, weight="bold"),
+            text_color="#FFFFFF"
+        ).pack(anchor="w", padx=16, pady=(10, 2))
+        ctk.CTkLabel(
+            hdr,
+            text=f"Current Installed Version: v{APP_VERSION}  |  CBSE 1230048",
+            font=ctk.CTkFont(size=11),
+            text_color="#CBD5E1"
+        ).pack(anchor="w", padx=16, pady=(0, 10))
+
+        # Main scrollable container
+        content = ctk.CTkScrollableFrame(win, corner_radius=0)
+        content.pack(fill="both", expand=True, padx=16, pady=12)
+
+        # --- SECTION 1: CHECK FOR UPDATES CARD ---
+        card_check = ctk.CTkFrame(content, corner_radius=8)
+        card_check.pack(fill="x", pady=(0, 12), padx=4)
+
+        ctk.CTkLabel(
+            card_check,
+            text="Online & Network Update Channel",
+            font=ctk.CTkFont(size=13, weight="bold")
+        ).pack(anchor="w", padx=14, pady=(12, 4))
+
+        status_lbl = ctk.CTkLabel(
+            card_check,
+            text="Click below to check for the latest version...",
+            font=ctk.CTkFont(size=12),
+            text_color=("#475569", "#94A3B8"),
+            justify="left"
+        )
+        status_lbl.pack(anchor="w", padx=14, pady=(0, 8))
+
+        progress_bar = ctk.CTkProgressBar(card_check)
+        progress_bar.set(0.0)
+
+        # Frame for details when update found
+        details_frame = ctk.CTkFrame(card_check, fg_color=("#F1F5F9", "#0F172A"), corner_radius=6)
+        lbl_new_ver = ctk.CTkLabel(details_frame, text="", font=ctk.CTkFont(size=12, weight="bold"))
+        lbl_new_ver.pack(anchor="w", padx=10, pady=(8, 4))
+        txt_changelog = ctk.CTkTextbox(details_frame, height=90, font=ctk.CTkFont(size=11))
+        txt_changelog.pack(fill="x", padx=10, pady=(0, 8))
+
+        btn_download = ctk.CTkButton(
+            details_frame,
+            text="🚀 Download & Install Update",
+            font=ctk.CTkFont(weight="bold"),
+            fg_color="#059669",
+            hover_color="#047857",
+            height=34
+        )
+
+        def do_check():
+            status_lbl.configure(text="🔍 Checking for newer version...", text_color=("#2563EB", "#3B82F6"))
+            btn_check.configure(state="disabled")
+            def worker():
+                res = updater.check_for_updates(self.config)
+                def update_ui():
+                    btn_check.configure(state="normal")
+                    if res.get('has_update'):
+                        status_lbl.configure(text=f"✨ New Update v{res['new_version']} Found!", text_color="#059669")
+                        lbl_new_ver.configure(text=f"Version v{res['new_version']} (Released: {res.get('date', 'Recent')})")
+                        txt_changelog.delete("1.0", "end")
+                        txt_changelog.insert("1.0", res.get('notes', 'Bug fixes and feature updates.'))
+                        details_frame.pack(fill="x", padx=14, pady=(4, 12))
+                        btn_download.pack(fill="x", padx=10, pady=(0, 10))
+                        btn_download.configure(command=lambda: self._start_online_update_flow(res, progress_bar, status_lbl, btn_download, win))
+                    else:
+                        details_frame.pack_forget()
+                        err = res.get('error')
+                        if err:
+                            status_lbl.configure(text=f"⚠️ {err}\n(You can also use 'Install Update from File (.zip)' below)", text_color="#D97706")
+                        else:
+                            status_lbl.configure(text=f"✅ You are running the latest version (v{APP_VERSION}).", text_color="#059669")
+                self.after(0, update_ui)
+            import threading
+            threading.Thread(target=worker, daemon=True).start()
+
+        btn_row_check = ctk.CTkFrame(card_check, fg_color="transparent")
+        btn_row_check.pack(fill="x", padx=14, pady=(0, 12))
+        btn_check = ctk.CTkButton(
+            btn_row_check,
+            text="🔄 Check Now",
+            width=130,
+            command=do_check
+        )
+        btn_check.pack(side="left")
+
+        # Auto-check if we already discovered an update in background
+        if self.latest_update_info and self.latest_update_info.get('has_update'):
+            res = self.latest_update_info
+            status_lbl.configure(text=f"✨ New Update v{res['new_version']} Found!", text_color="#059669")
+            lbl_new_ver.configure(text=f"Version v{res['new_version']} (Released: {res.get('date', 'Recent')})")
+            txt_changelog.delete("1.0", "end")
+            txt_changelog.insert("1.0", res.get('notes', 'Bug fixes and feature updates.'))
+            details_frame.pack(fill="x", padx=14, pady=(4, 12))
+            btn_download.pack(fill="x", padx=10, pady=(0, 10))
+            btn_download.configure(command=lambda: self._start_online_update_flow(res, progress_bar, status_lbl, btn_download, win))
+
+        # --- SECTION 2: OFFLINE / USB UPDATE CARD ---
+        card_offline = ctk.CTkFrame(content, corner_radius=8)
+        card_offline.pack(fill="x", pady=(0, 12), padx=4)
+
+        ctk.CTkLabel(
+            card_offline,
+            text="Offline / USB Update (No Internet Required)",
+            font=ctk.CTkFont(size=13, weight="bold")
+        ).pack(anchor="w", padx=14, pady=(12, 4))
+
+        ctk.CTkLabel(
+            card_offline,
+            text="If an update package (.zip) was given to you via USB drive or local disk,\nselect the file below to upgrade this computer immediately.",
+            font=ctk.CTkFont(size=11),
+            text_color=("#64748B", "#94A3B8"),
+            justify="left"
+        ).pack(anchor="w", padx=14, pady=(0, 10))
+
+        ctk.CTkButton(
+            card_offline,
+            text="📁 Select Update Package (.zip) & Install...",
+            height=34,
+            fg_color=("#334155", "#475569"),
+            hover_color=("#1E293B", "#334155"),
+            command=lambda: self._install_update_from_file(win)
+        ).pack(fill="x", padx=14, pady=(0, 14))
+
+        # --- SECTION 3: UPDATE SOURCE SETTINGS CARD ---
+        card_cfg = ctk.CTkFrame(content, corner_radius=8)
+        card_cfg.pack(fill="x", pady=(0, 12), padx=4)
+
+        ctk.CTkLabel(
+            card_cfg,
+            text="⚙️ Update Source Settings",
+            font=ctk.CTkFont(size=13, weight="bold")
+        ).pack(anchor="w", padx=14, pady=(12, 6))
+
+        # Network shared folder
+        ctk.CTkLabel(card_cfg, text="Local School Network Folder (e.g. \\\\SERVER\\Updates):", font=ctk.CTkFont(size=11, weight="bold")).pack(anchor="w", padx=14, pady=(2, 2))
+        f_net = ctk.CTkFrame(card_cfg, fg_color="transparent")
+        f_net.pack(fill="x", padx=14, pady=(0, 8))
+        ent_net = ctk.CTkEntry(f_net, placeholder_text="\\\\SERVER\\CertificateUpdates or D:\\Shared\\Updates")
+        ent_net.insert(0, self.config.get("update_network_folder", ""))
+        ent_net.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        def browse_net():
+            p = filedialog.askdirectory(parent=win, title="Select Network Shared Updates Folder")
+            if p:
+                ent_net.delete(0, "end")
+                ent_net.insert(0, p)
+        ctk.CTkButton(f_net, text="Browse", width=70, command=browse_net).pack(side="left")
+
+        # Online URL
+        ctk.CTkLabel(card_cfg, text="Online Web Update URL (version.json):", font=ctk.CTkFont(size=11, weight="bold")).pack(anchor="w", padx=14, pady=(2, 2))
+        ent_url = ctk.CTkEntry(card_cfg, placeholder_text="https://raw.githubusercontent.com/.../version.json")
+        ent_url.insert(0, self.config.get("update_url", ""))
+        ent_url.pack(fill="x", padx=14, pady=(0, 10))
+
+        chk_auto = ctk.CTkCheckBox(card_cfg, text="Automatically check for updates on software startup")
+        if self.config.get("auto_check_updates", True):
+            chk_auto.select()
+        else:
+            chk_auto.deselect()
+        chk_auto.pack(anchor="w", padx=14, pady=(0, 12))
+
+        def save_updater_settings():
+            self.config["update_network_folder"] = ent_net.get().strip()
+            self.config["update_url"] = ent_url.get().strip()
+            self.config["auto_check_updates"] = bool(chk_auto.get())
+            save_config(self.config)
+            messagebox.showinfo("Settings Saved", "Update source configuration saved successfully!", parent=win)
+
+        ctk.CTkButton(
+            card_cfg,
+            text="💾 Save Update Settings",
+            width=160,
+            fg_color="#059669",
+            hover_color="#047857",
+            command=save_updater_settings
+        ).pack(anchor="w", padx=14, pady=(0, 14))
+
+    def _start_online_update_flow(self, info, progress_bar, status_lbl, btn_download, parent_win):
+        """Downloads and applies update over internet or network."""
+        import threading
+        btn_download.configure(state="disabled", text="Downloading update...")
+        progress_bar.pack(fill="x", padx=14, pady=(4, 10))
+        progress_bar.set(0.0)
+        status_lbl.configure(text="Connecting to update source...")
+
+        def worker():
+            temp_zip = os.path.join(get_base_dir(), "update_package.zip")
+            def on_progress(pct):
+                self.after(0, lambda: progress_bar.set(pct / 100.0))
+                self.after(0, lambda: status_lbl.configure(text=f"Downloading update: {pct}%"))
+
+            try:
+                updater.download_file(info['download_url'], temp_zip, progress_callback=on_progress)
+                self.after(0, lambda: status_lbl.configure(text="Download complete! Applying update..."))
+                is_frozen = getattr(sys, 'frozen', False)
+                base_dir = get_base_dir()
+                self.after(500, lambda: updater.apply_update_from_zip(temp_zip, is_frozen, base_dir))
+            except Exception as e:
+                self.after(0, lambda: btn_download.configure(state="normal", text="🚀 Download & Install Update"))
+                self.after(0, lambda: status_lbl.configure(text=f"❌ Download failed: {e}"))
+                self.after(0, lambda: messagebox.showerror("Update Error", f"Failed to download update:\n{e}", parent=parent_win))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _install_update_from_file(self, parent_win=None):
+        """Lets the user select an update zip from disk/USB and installs it."""
+        zip_path = filedialog.askopenfilename(
+            parent=parent_win or self,
+            title="Select Certificate Studio Update Package",
+            filetypes=[("Zip Archives", "*.zip"), ("All Files", "*.*")]
+        )
+        if not zip_path:
+            return
+
+        confirm = messagebox.askyesno(
+            "Confirm Update Installation",
+            f"Are you sure you want to install this update package?\n\n"
+            f"File: {os.path.basename(zip_path)}\n\n"
+            f"The application will automatically close, install updated files,\n"
+            f"and relaunch. Your student records and alignments will be preserved.",
+            parent=parent_win or self
+        )
+        if not confirm:
+            return
+
+        try:
+            is_frozen = getattr(sys, 'frozen', False)
+            base_dir = get_base_dir()
+            updater.apply_update_from_zip(zip_path, is_frozen, base_dir)
+        except Exception as e:
+            messagebox.showerror("Update Failed", f"Could not apply update:\n{e}", parent=parent_win or self)
+
+    def _open_create_update_dialog(self):
+        """Admin tool to package the current software state into an update zip."""
+        win = ctk.CTkToplevel(self)
+        win.title("Create Software Update Package")
+        win.geometry("520x460")
+        win.minsize(480, 420)
+        win.transient(self)
+        win.grab_set()
+
+        ico_file = get_asset_path("assets", "app_icon.ico")
+        if os.path.exists(ico_file):
+            try: win.iconbitmap(ico_file)
+            except Exception: pass
+
+        ctk.CTkLabel(
+            win,
+            text="📦 Package Current Software as Update",
+            font=ctk.CTkFont(size=15, weight="bold")
+        ).pack(anchor="w", padx=18, pady=(16, 4))
+
+        ctk.CTkLabel(
+            win,
+            text=f"Current Version is v{APP_VERSION}. Specify the new version to distribute\nto other school computers.",
+            font=ctk.CTkFont(size=11),
+            text_color=("#64748B", "#94A3B8"),
+            justify="left"
+        ).pack(anchor="w", padx=18, pady=(0, 12))
+
+        # Version input
+        v_parts = APP_VERSION.split('.')
+        try:
+            suggested_v = f"{v_parts[0]}.{v_parts[1]}.{int(v_parts[2]) + 1}"
+        except Exception:
+            suggested_v = "1.0.1"
+
+        ctk.CTkLabel(win, text="New Version Number (e.g. 1.0.1):", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=18, pady=(4, 2))
+        ent_ver = ctk.CTkEntry(win, width=160)
+        ent_ver.insert(0, suggested_v)
+        ent_ver.pack(anchor="w", padx=18, pady=(0, 10))
+
+        # Changelog input
+        ctk.CTkLabel(win, text="Changelog / What's New:", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=18, pady=(4, 2))
+        txt_notes = ctk.CTkTextbox(win, height=100)
+        txt_notes.insert("1.0", "- Updated certificate alignment and font size 22.\n- Cleaned date formatting.\n- Blank Excel/CSV templates included.")
+        txt_notes.pack(fill="x", padx=18, pady=(0, 12))
+
+        # Target output folder
+        default_out = os.path.join(get_base_dir(), "Output_Certificates")
+        ctk.CTkLabel(win, text="Save Update Package In:", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=18, pady=(4, 2))
+        f_dest = ctk.CTkFrame(win, fg_color="transparent")
+        f_dest.pack(fill="x", padx=18, pady=(0, 16))
+        ent_dest = ctk.CTkEntry(f_dest)
+        ent_dest.insert(0, default_out)
+        ent_dest.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        def browse_dest():
+            p = filedialog.askdirectory(parent=win, title="Select Destination Folder")
+            if p:
+                ent_dest.delete(0, "end")
+                ent_dest.insert(0, p)
+        ctk.CTkButton(f_dest, text="Browse", width=70, command=browse_dest).pack(side="left")
+
+        lbl_status = ctk.CTkLabel(win, text="", font=ctk.CTkFont(size=11))
+        lbl_status.pack(anchor="w", padx=18, pady=(0, 6))
+
+        def do_create():
+            n_ver = ent_ver.get().strip()
+            if not n_ver:
+                messagebox.showerror("Error", "Please enter a valid version number.", parent=win)
+                return
+            n_notes = txt_notes.get("1.0", "end").strip()
+            dest_dir = ent_dest.get().strip() or default_out
+
+            btn_build.configure(state="disabled", text="Packaging files...")
+            lbl_status.configure(text="Compressing and generating version manifest...", text_color="#2563EB")
+
+            def worker():
+                try:
+                    zip_p, json_p = updater.create_update_package(n_ver, n_notes, dest_dir)
+                    def on_done():
+                        btn_build.configure(state="normal", text="📦 Generate Update Package (.zip)")
+                        lbl_status.configure(text="✅ Update package generated successfully!", text_color="#059669")
+                        confirm_open = messagebox.askyesno(
+                            "Update Package Created",
+                            f"Update Package v{n_ver} has been generated successfully!\n\n"
+                            f"Files created:\n"
+                            f"• {os.path.basename(zip_p)}\n"
+                            f"• {os.path.basename(json_p)}\n\n"
+                            f"Location: {dest_dir}\n\n"
+                            f"Would you like to open this folder now?",
+                            parent=win
+                        )
+                        if confirm_open:
+                            try:
+                                os.startfile(dest_dir)
+                            except Exception:
+                                pass
+                        win.destroy()
+                    self.after(0, on_done)
+                except Exception as e:
+                    def on_err():
+                        btn_build.configure(state="normal", text="📦 Generate Update Package (.zip)")
+                        lbl_status.configure(text=f"❌ Failed: {e}", text_color="#EF4444")
+                        messagebox.showerror("Error", f"Failed to create update package:\n{e}", parent=win)
+                    self.after(0, on_err)
+
+            import threading
+            threading.Thread(target=worker, daemon=True).start()
+
+        btn_build = ctk.CTkButton(
+            win,
+            text="📦 Generate Update Package (.zip)",
+            font=ctk.CTkFont(weight="bold"),
+            height=36,
+            fg_color="#059669",
+            hover_color="#047857",
+            command=do_create
+        )
+        btn_build.pack(fill="x", padx=18, pady=(0, 16))
 
 def main():
     app = CertificateApp()

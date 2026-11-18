@@ -45,6 +45,8 @@ hiddenimports = [
     'printer',
     'batch_processor',
     'tray_manager',
+    'version',
+    'updater',
 ] + collect_submodules('customtkinter')
 
 a = Analysis(
