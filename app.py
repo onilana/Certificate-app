@@ -21,6 +21,7 @@ from printer import (
 )
 from batch_processor import read_batch_file, create_sample_files
 from tray_manager import SysTrayManager
+from path_utils import get_asset_path, get_base_dir
 
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
@@ -36,8 +37,8 @@ class CertificateApp(ctk.CTk):
         self.minsize(1140, 760)
 
         # Set official school emblem icon for application window & taskbar
-        ico_file = os.path.join(os.path.dirname(__file__), "assets", "app_icon.ico")
-        png_file = os.path.join(os.path.dirname(__file__), "assets", "app_icon.png")
+        ico_file = get_asset_path("assets", "app_icon.ico")
+        png_file = get_asset_path("assets", "app_icon.png")
         if os.path.exists(ico_file):
             try:
                 self.iconbitmap(ico_file)
@@ -162,7 +163,7 @@ class CertificateApp(ctk.CTk):
         header_frame.pack(side="top", fill="x")
 
         # School Emblem / Logo on the left side of the header
-        logo_path = os.path.join(os.path.dirname(__file__), "assets", "app_icon.png")
+        logo_path = get_asset_path("assets", "app_icon.png")
         if os.path.exists(logo_path):
             try:
                 logo_img = Image.open(logo_path)

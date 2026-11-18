@@ -1,8 +1,9 @@
 import json
 import os
+from path_utils import get_base_dir
 
-CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'config.json')
-DEFAULT_OUTPUT_DIR = os.path.join(os.path.dirname(__file__), 'Output_Certificates')
+CONFIG_FILE = os.path.join(get_base_dir(), 'config.json')
+DEFAULT_OUTPUT_DIR = os.path.join(get_base_dir(), 'Output_Certificates')
 
 DEFAULT_CONFIG = {
     "printer_name": "",

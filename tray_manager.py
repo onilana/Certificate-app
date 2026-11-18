@@ -68,7 +68,8 @@ class SysTrayManager:
             )
 
             # Try to load official Mount Everest school logo icon or fallback to default
-            icon_path = os.path.join(os.path.dirname(__file__), "assets", "app_icon.ico")
+            from path_utils import get_asset_path
+            icon_path = get_asset_path("assets", "app_icon.ico")
             self.hicon = 0
             if os.path.exists(icon_path):
                 try:

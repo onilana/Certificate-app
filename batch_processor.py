@@ -304,6 +304,7 @@ def create_sample_files(dest_dir: str):
     return excel_path, csv_path
 
 if __name__ == '__main__':
-    dest = os.path.join(os.path.dirname(__file__), 'samples')
+    from path_utils import get_base_dir
+    dest = os.path.join(get_base_dir(), 'samples')
     ex, cs = create_sample_files(dest)
     print(f"Sample files created:\n{ex}\n{cs}")

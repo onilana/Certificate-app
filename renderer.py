@@ -8,9 +8,10 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.colors import HexColor
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from path_utils import get_base_dir, get_asset_path
 
-TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), 'assets', 'templates')
-POSITIONS_FILE = os.path.join(os.path.dirname(__file__), 'custom_positions.json')
+TEMPLATES_DIR = get_asset_path('assets', 'templates')
+POSITIONS_FILE = os.path.join(get_base_dir(), 'custom_positions.json')
 
 CERT_TYPES = {
     'provisional': {
@@ -434,7 +435,7 @@ class CertificateRenderer:
     def _load_fonts(self):
         windir = os.environ.get('WINDIR', 'C:\\Windows')
         fonts_dir = os.path.join(windir, 'Fonts')
-        local_fonts = os.path.join(os.path.dirname(__file__), 'assets', 'fonts')
+        local_fonts = get_asset_path('assets', 'fonts')
 
         def find_font(fname):
             p1 = os.path.join(local_fonts, fname)
