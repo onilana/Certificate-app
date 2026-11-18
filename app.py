@@ -1,5 +1,6 @@
 import os
 import sys
+import tempfile
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from datetime import datetime
@@ -1187,7 +1188,8 @@ class CertificateApp(ctk.CTk):
         data = self.get_current_form_data()
         selected_types = self.get_selected_cert_types()
         
-        out_pdf = os.path.join(get_output_dir(), f"Preview_{self.current_cert_type}_{datetime.now().strftime('%H%M%S')}.pdf")
+        # Save temporary preview PDF in system temp folder so Output_Certificates stays clean
+        out_pdf = os.path.join(tempfile.gettempdir(), f"Preview_{self.current_cert_type}_{datetime.now().strftime('%H%M%S')}.pdf")
         mode = self.print_mode_var.get()
         cfg = self.config.copy()
         cfg['strike_unused'] = self.strike_var.get()
@@ -1481,10 +1483,6 @@ class CertificateApp(ctk.CTk):
 
             self.status_lbl.configure(text=f"Sent {len(selected_types)} certificate(s) to printer ({color_mode})!", text_color="#059669")
 
-            # Also generate a saved copy in Output_Certificates folder
-            out_pdf = os.path.join(get_output_dir(), f"PrintJob_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf")
-            self.renderer.render_pdf([data], out_pdf, mode=mode, cert_type=self.current_cert_type, selected_cert_types=selected_types, config=cfg)
-
             # Sl. No. is identical across Provisional, Character, Transfer (last 3 digits of registration)
             reg = data.get('reg_no', '')
             common_sl = compute_sl_no('provisional', reg_no=reg) or data.get('sl_no', '')
@@ -1533,10 +1531,6 @@ class CertificateApp(ctk.CTk):
                 return
 
             self.status_lbl.configure(text=f"Sent {len(selected_types)} certificate(s) to printer ({color_mode})!", text_color="#059669")
-
-            # Also generate a saved copy in Output_Certificates folder
-            out_pdf = os.path.join(get_output_dir(), f"PrintJob_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf")
-            self.renderer.render_pdf([data], out_pdf, mode=mode, cert_type=self.current_cert_type, selected_cert_types=selected_types, config=cfg)
 
             # Sl. No. is identical across Provisional, Character, Transfer
             reg = data.get('reg_no', '')
@@ -2440,7 +2434,7 @@ class CertificateApp(ctk.CTk):
         self._refresh_printer_papers()
 
     def _print_calibration_sheet(self):
-        cal_path = os.path.join(get_output_dir(), f'Calibration_{self.current_cert_type}.pdf')
+        cal_path = os.path.join(tempfile.gettempdir(), f'Calibration_{self.current_cert_type}.pdf')
         cfg = self.config.copy()
         self.renderer.render_calibration_sheet(cal_path, cert_type=self.current_cert_type, config=cfg)
 
@@ -3420,7 +3414,7 @@ class CertificateApp(ctk.CTk):
         dummy_data = ADMIN_SAMPLE_DATA.get(cert_k, {})
         cfg = self.config.copy()
 
-        out_pdf = os.path.join(get_output_dir(), f"Admin_Alignment_Test_{cert_k}_{mode}.pdf")
+        out_pdf = os.path.join(tempfile.gettempdir(), f"Admin_Alignment_Test_{cert_k}_{mode}.pdf")
         self.renderer.render_pdf(
             [dummy_data],
             out_pdf,
