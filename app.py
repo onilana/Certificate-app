@@ -2256,8 +2256,8 @@ class CertificateApp(ctk.CTk):
         f_fsize = ctk.CTkFrame(left_box, fg_color="transparent")
         f_fsize.pack(fill="x", pady=4)
         ctk.CTkLabel(f_fsize, text="Font Size (pt):", width=130, anchor="w").pack(side="left")
-        self.opt_fsize = ctk.CTkOptionMenu(f_fsize, values=["13", "14", "15", "16", "17", "18"], command=self._on_fsize_change)
-        self.opt_fsize.set(str(self.config.get("font_size", 15)))
+        self.opt_fsize = ctk.CTkOptionMenu(f_fsize, values=["14", "15", "16", "17", "18", "19", "20", "21", "22", "24", "26"], command=self._on_fsize_change)
+        self.opt_fsize.set(str(self.config.get("font_size", 22)))
         self.opt_fsize.pack(side="left")
 
         f_fcol = ctk.CTkFrame(left_box, fg_color="transparent")

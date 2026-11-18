@@ -529,7 +529,7 @@ class CertificateRenderer:
         # Canvas is IMG_W (3000px) over w_pt (756pt for 10.5" certificate)
         # 1 pt = (IMG_W / w_pt) pixels (~3.96825 px/pt)
         px_per_pt = IMG_W / w_pt if w_pt > 0 else 3.96825
-        base_font_size = int(round(cfg.get('font_size', 18) * px_per_pt))
+        base_font_size = int(round(cfg.get('font_size', 22) * px_per_pt))
         font_color = hex_to_rgb(cfg.get('font_color', '#001478'))
         sl_color = hex_to_rgb(cfg.get('sl_no_color', '#b40000'))
         is_bold = cfg.get('is_bold', False)
@@ -547,7 +547,7 @@ class CertificateRenderer:
         draw = ImageDraw.Draw(img)
         font_family = cfg.get('font_family', 'CommercialScriptBT')
         font = self.get_pil_font(size=base_font_size, bold=is_bold, italic=is_italic, font_family=font_family)
-        sl_font_size = int(round((cfg.get('font_size', 18) + 1.0) * px_per_pt))
+        sl_font_size = int(round((cfg.get('font_size', 22) + 1.0) * px_per_pt))
         font_sl = self.get_pil_font(size=sl_font_size, bold=True, italic=True, font_family=font_family)
 
         def draw_field(key, text, color=font_color, custom_font=font):
@@ -647,7 +647,7 @@ class CertificateRenderer:
         w, h = get_page_dimensions(cfg)
         ox_pt = cfg.get('offset_x_mm', 0.0) * 2.83465
         oy_pt = cfg.get('offset_y_mm', 0.0) * 2.83465
-        font_size = float(cfg.get('font_size', 18))
+        font_size = float(cfg.get('font_size', 22))
         font_color = hex_to_reportlab(cfg.get('font_color', '#001478'))
         sl_color = hex_to_reportlab(cfg.get('sl_no_color', '#b40000'))
         is_bold = cfg.get('is_bold', False)

@@ -16,7 +16,7 @@ DEFAULT_CONFIG = {
     "print_color_mode": "Color",  # "Color" or "Grayscale"
     "offset_x_mm": 0.0,
     "offset_y_mm": 0.0,
-    "font_size": 18,
+    "font_size": 22,
     "font_color": "#001478",       # Deep Navy Blue
     "sl_no_color": "#b40000",      # Crimson Red
     "font_family": "CommercialScriptBT",
