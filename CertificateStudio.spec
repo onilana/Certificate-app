@@ -17,6 +17,7 @@ datas = [
     (os.path.join(BASE_DIR, 'assets'), 'assets'),
     (os.path.join(BASE_DIR, 'samples'), 'samples'),
     (os.path.join(BASE_DIR, 'custom_positions.json'), '.'),
+    (os.path.join(BASE_DIR, 'templates_config.json'), '.'),
 ] + customtkinter_datas + reportlab_datas
 
 # Hidden imports to ensure win32, pystray, and GUI submodules are included
@@ -47,6 +48,8 @@ hiddenimports = [
     'tray_manager',
     'version',
     'updater',
+    'template_manager',
+    'vector_template_renderer',
 ] + collect_submodules('customtkinter')
 
 a = Analysis(

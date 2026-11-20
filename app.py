@@ -25,6 +25,7 @@ from tray_manager import SysTrayManager
 from path_utils import get_asset_path, get_base_dir
 from version import APP_VERSION, APP_NAME
 import updater
+from template_manager import load_template_config, save_template_config, reset_template_config
 
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
@@ -148,7 +149,7 @@ class CertificateApp(ctk.CTk):
         self.update_preview()
 
     def _open_admin_portal(self):
-        self.tabview.set("  🛠️ Admin Alignment Portal  ")
+        self.tabview.set("  🛠️ Admin  ")
         if not self.admin_authenticated:
             self._show_admin_lock_screen()
         else:
@@ -212,11 +213,11 @@ class CertificateApp(ctk.CTk):
             command=open_output_folder
         ).pack(side="left", padx=6)
 
-        # Admin Alignment Portal Button
+        # Admin Portal Button
         ctk.CTkButton(
             right_box,
-            text="🛠️ Admin Alignment",
-            width=140,
+            text="🛠️ Admin",
+            width=100,
             height=30,
             fg_color="#D97706",
             hover_color="#B45309",
@@ -296,7 +297,7 @@ class CertificateApp(ctk.CTk):
         self.tab_batch = self.tabview.add("  📊 Batch Processing (Excel/CSV)  ")
         self.tab_records = self.tabview.add("  📁 Records & Search  ")
         self.tab_calib = self.tabview.add("  ⚙️ Printer Paper & Calibration  ")
-        self.tab_admin = self.tabview.add("  🛠️ Admin Alignment Portal  ")
+        self.tab_admin = self.tabview.add("  🛠️ Admin  ")
 
         self._build_single_tab()
         self._build_batch_tab()
@@ -483,6 +484,19 @@ class CertificateApp(ctk.CTk):
             command=self._on_paper_size_select
         )
         self.opt_paper.pack(side="left", fill="x", expand=True)
+
+        # Editable Vector Template toggle
+        self.use_editable_tmpl_var = ctk.BooleanVar(value=self.config.get("use_editable_template", True))
+        t_row = ctk.CTkFrame(top_ctrl_box, fg_color="transparent")
+        t_row.pack(fill="x", padx=8, pady=(0, 4))
+        self.chk_editable_tmpl = ctk.CTkCheckBox(
+            t_row,
+            text="Editable Vector Template (instead of PNG)",
+            variable=self.use_editable_tmpl_var,
+            font=ctk.CTkFont(size=11),
+            command=self._on_toggle_editable_tmpl
+        )
+        self.chk_editable_tmpl.pack(side="left")
 
         # Selective Print Section (Page 1 Prov, Page 2 Char, Page 3 Trans, Page 4 Read)
         sel_frame = ctk.CTkFrame(left_frame, fg_color=("#EFF6FF", "#172554"), corner_radius=6)
@@ -738,6 +752,12 @@ class CertificateApp(ctk.CTk):
 
         save_config(self.config)
         self._update_footer_info()
+        self.update_preview()
+
+    def _on_toggle_editable_tmpl(self):
+        val = bool(self.use_editable_tmpl_var.get())
+        self.config['use_editable_template'] = val
+        save_config(self.config)
         self.update_preview()
 
     def _build_form_fields(self, preserve_data=None):
@@ -2491,7 +2511,7 @@ class CertificateApp(ctk.CTk):
 
         ctk.CTkLabel(
             card,
-            text="Admin Alignment Portal",
+            text="Admin Portal",
             font=ctk.CTkFont(family="Times New Roman", size=20, weight="bold"),
             text_color=("#0F172A", "#F8FAFC")
         ).pack(pady=(0, 4))
@@ -2593,14 +2613,25 @@ class CertificateApp(ctk.CTk):
 
         ctk.CTkLabel(
             hdr_top,
-            text="🛠️ Admin Alignment Portal",
+            text="🛠️ Admin",
             font=ctk.CTkFont(size=14, weight="bold"),
             text_color=("#0F172A", "#F8FAFC")
         ).pack(side="left")
 
-        # Top Right Actions: Change Password & Lock
+        # Top Right Actions: Edit Wording, Change Password & Lock
         hdr_btns = ctk.CTkFrame(hdr_top, fg_color="transparent")
         hdr_btns.pack(side="right")
+
+        ctk.CTkButton(
+            hdr_btns,
+            text="✏️ Edit Wording",
+            font=ctk.CTkFont(size=10, weight="bold"),
+            width=90,
+            height=24,
+            fg_color="#D97706",
+            hover_color="#B45309",
+            command=self._open_template_editor_dialog
+        ).pack(side="left", padx=2)
 
         ctk.CTkButton(
             hdr_btns,
@@ -2626,7 +2657,7 @@ class CertificateApp(ctk.CTk):
 
         ctk.CTkLabel(
             hdr_frame,
-            text="Fine-tune text field positions (X, Y) to align perfectly with your stationery.",
+            text="Fine-tune field positions (X, Y) and customize certificate wording & fonts.",
             font=ctk.CTkFont(size=11),
             text_color=("#64748B", "#94A3B8")
         ).pack(anchor="w", padx=10, pady=(0, 6))
@@ -2634,6 +2665,31 @@ class CertificateApp(ctk.CTk):
         # Scrollable controls frame for left pane
         ctrl_scroll = ctk.CTkScrollableFrame(left_pane, fg_color="transparent")
         ctrl_scroll.pack(fill="both", expand=True, padx=4, pady=4)
+
+        # 0. Featured Template & Wording Editor Box
+        tmpl_sec = ctk.CTkFrame(ctrl_scroll, fg_color=("#FEF3C7", "#78350F"), corner_radius=6)
+        tmpl_sec.pack(fill="x", pady=(2, 6))
+        ctk.CTkLabel(
+            tmpl_sec,
+            text="✏️ Certificate Templates & Wording Editor",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=("#92400E", "#FDE68A")
+        ).pack(anchor="w", padx=10, pady=(6, 2))
+        ctk.CTkLabel(
+            tmpl_sec,
+            text="Customize per-line header fonts & sizes, body/footer styling, and text wording.",
+            font=ctk.CTkFont(size=10),
+            text_color=("#B45309", "#FCD34D")
+        ).pack(anchor="w", padx=10, pady=(0, 6))
+        ctk.CTkButton(
+            tmpl_sec,
+            text="✏️ Open Template & Wording Editor",
+            height=28,
+            fg_color="#D97706",
+            hover_color="#B45309",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            command=self._open_template_editor_dialog
+        ).pack(fill="x", padx=10, pady=(0, 8))
 
         # 2. Certificate Type Selector
         cert_sec = ctk.CTkFrame(ctrl_scroll, corner_radius=6)
@@ -3217,7 +3273,7 @@ class CertificateApp(ctk.CTk):
     def _on_admin_key_nudge(self, dx_sign, dy_sign, event):
         # Only nudge if Admin Portal tab is currently active and authenticated
         try:
-            if "Admin Alignment" not in self.tabview.get() or not self.admin_authenticated:
+            if "Admin" not in self.tabview.get() or not self.admin_authenticated:
                 return
         except Exception:
             return
@@ -3841,6 +3897,721 @@ class CertificateApp(ctk.CTk):
             command=do_create
         )
         btn_build.pack(fill="x", padx=18, pady=(0, 16))
+
+    def _open_template_editor_dialog(self):
+        """
+        Opens the Visual Certificate Template & Wording Editor.
+        Provides per-line font family & font size controls for the school header,
+        common font & size controls for body and footer, wording customizations,
+        and an instant real-time WYSIWYG live visual preview of the actual certificate.
+        """
+        import copy
+        tmpl_cfg = copy.deepcopy(load_template_config())
+
+        win = ctk.CTkToplevel(self)
+        win.title("Certificate Template & Wording Editor (Visual Preview)")
+        win.geometry("1240x780")
+        win.minsize(1050, 680)
+        win.transient(self)
+        win.grab_set()
+
+        ico_file = get_asset_path("assets", "app_icon.ico")
+        if os.path.exists(ico_file):
+            try: win.iconbitmap(ico_file)
+            except Exception: pass
+
+        # Top banner
+        hdr = ctk.CTkFrame(win, fg_color=("#1B365D", "#0F1E33"), corner_radius=0, height=54)
+        hdr.pack(fill="x")
+
+        lbl_top = ctk.CTkLabel(
+            hdr,
+            text="✏️ Visual Certificate Template & Wording Customizer",
+            font=ctk.CTkFont(family="Times New Roman", size=15, weight="bold"),
+            text_color="#FFFFFF"
+        )
+        lbl_top.pack(side="left", padx=18, pady=10)
+
+        # Active certificate selector on top right of banner
+        cert_switch_box = ctk.CTkFrame(hdr, fg_color="transparent")
+        cert_switch_box.pack(side="right", padx=16, pady=8)
+
+        ctk.CTkLabel(
+            cert_switch_box,
+            text="Previewing Certificate:",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#CBD5E1"
+        ).pack(side="left", padx=(0, 6))
+
+        active_cert_var = ctk.StringVar(value="Provisional")
+
+        # Fonts & Sizes available
+        FONT_CHOICES = ["Times New Roman", "CommercialScriptBT", "Casmira", "Souvenir", "Arial", "Georgia"]
+        FONT_SIZE_CHOICES = [str(i) for i in [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 22, 24, 26, 28, 30, 32, 36, 40]]
+
+        # Main Split Content Frame: Left (Controls), Right (Live Visual Canvas)
+        main_split = ctk.CTkFrame(win, fg_color="transparent")
+        main_split.pack(fill="both", expand=True, padx=12, pady=(8, 8))
+
+        # --- LEFT CONTROLS COLUMN (540px wide) ---
+        left_col = ctk.CTkFrame(main_split, fg_color="transparent", width=540)
+        left_col.pack(side="left", fill="both", expand=False, padx=(0, 6))
+        left_col.pack_propagate(False)
+
+        tabs = ctk.CTkTabview(left_col)
+        tabs.pack(fill="both", expand=True)
+
+        tab_hdr = tabs.add("🏫 Header Lines")
+        tab_body = tabs.add("📜 Body & Wording")
+        tab_foot = tabs.add("✍️ Footer & Signatures")
+
+        # Stores widget references
+        widgets_map = {}
+        body_entries_map = {}
+
+        # Debounced live preview update timer
+        timer_holder = {"timer": None}
+
+        def schedule_live_update(event=None):
+            if timer_holder["timer"] is not None:
+                win.after_cancel(timer_holder["timer"])
+            timer_holder["timer"] = win.after(60, trigger_live_preview)
+
+        def trigger_live_preview():
+            _sync_ui_to_cfg()
+            _render_live_canvas()
+
+        # Build Tab 1: Header Lines
+        scr_hdr = ctk.CTkScrollableFrame(tab_hdr, fg_color="transparent")
+        scr_hdr.pack(fill="both", expand=True, padx=4, pady=4)
+
+        def add_header_line_card(parent, title, key_prefix, default_font="Times New Roman", default_size=12, is_title=False):
+            card = ctk.CTkFrame(parent, fg_color=("#F1F5F9", "#1E293B"), corner_radius=6)
+            card.pack(fill="x", pady=4, padx=4)
+
+            top_r = ctk.CTkFrame(card, fg_color="transparent")
+            top_r.pack(fill="x", padx=8, pady=(6, 2))
+            ctk.CTkLabel(top_r, text=title, font=ctk.CTkFont(size=11, weight="bold")).pack(side="left")
+
+            ent = ctk.CTkEntry(card, height=28, font=ctk.CTkFont(size=11))
+            if is_title:
+                c_k = active_cert_var.get().lower()
+                val = tmpl_cfg.get('certificates', {}).get(c_k, {}).get('title', title)
+            else:
+                k_lookup = f"{key_prefix}_title" if key_prefix == 'office' else (f"{key_prefix}_line" if key_prefix == 'affiliation' else (f"{key_prefix}_no" if key_prefix == 'affiliation_no' else (key_prefix + '_name' if key_prefix == 'school' else key_prefix)))
+                if key_prefix == 'sub': k_lookup = 'sub_title'
+                val = tmpl_cfg.get('header', {}).get(k_lookup, '')
+            ent.insert(0, str(val))
+            ent.pack(fill="x", padx=8, pady=(0, 4))
+            ent.bind("<KeyRelease>", schedule_live_update)
+
+            fs_r = ctk.CTkFrame(card, fg_color="transparent")
+            fs_r.pack(fill="x", padx=8, pady=(0, 6))
+
+            ctk.CTkLabel(fs_r, text="Font:", font=ctk.CTkFont(size=10)).pack(side="left", padx=(0, 4))
+            curr_font = tmpl_cfg.get('header', {}).get(f"{key_prefix}_font", default_font) if not is_title else tmpl_cfg.get('certificates', {}).get(active_cert_var.get().lower(), {}).get('title_font', default_font)
+            font_var = ctk.StringVar(value=curr_font if curr_font in FONT_CHOICES else default_font)
+            opt_font = ctk.CTkOptionMenu(fs_r, variable=font_var, values=FONT_CHOICES, width=155, height=24, font=ctk.CTkFont(size=10), command=lambda _: schedule_live_update())
+            opt_font.pack(side="left", padx=(0, 10))
+
+            ctk.CTkLabel(fs_r, text="Size (pt):", font=ctk.CTkFont(size=10)).pack(side="left", padx=(0, 4))
+            curr_sz = str(int(round(float(tmpl_cfg.get('header', {}).get(f"{key_prefix}_size", default_size) if not is_title else tmpl_cfg.get('certificates', {}).get(active_cert_var.get().lower(), {}).get('title_size', default_size)))))
+            sz_var = ctk.StringVar(value=curr_sz if curr_sz in FONT_SIZE_CHOICES else str(default_size))
+            opt_sz = ctk.CTkOptionMenu(fs_r, variable=sz_var, values=FONT_SIZE_CHOICES, width=65, height=24, font=ctk.CTkFont(size=10), command=lambda _: schedule_live_update())
+            opt_sz.pack(side="left")
+
+            widgets_map[key_prefix] = {
+                'entry': ent,
+                'font_var': font_var,
+                'sz_var': sz_var,
+                'is_title': is_title
+            }
+
+        h_data = tmpl_cfg.get('header', {})
+        add_header_line_card(scr_hdr, "1. Office Header Line", "office", h_data.get('office_font', 'Times New Roman'), h_data.get('office_size', 11))
+        add_header_line_card(scr_hdr, "2. School Name Line", "school", h_data.get('school_font', 'Times New Roman'), h_data.get('school_size', 22))
+        add_header_line_card(scr_hdr, "3. Address & Location Line", "sub", h_data.get('sub_font', 'Times New Roman'), h_data.get('sub_size', 10))
+        add_header_line_card(scr_hdr, "4. CBSE Affiliation Description", "affiliation", h_data.get('affiliation_font', 'CommercialScriptBT'), h_data.get('affiliation_size', 16))
+        add_header_line_card(scr_hdr, "5. Affiliation Number Line", "affiliation_no", h_data.get('affiliation_no_font', 'Times New Roman'), h_data.get('affiliation_no_size', 12))
+        add_header_line_card(scr_hdr, "6. Certificate Title (e.g. Provisional)", "title", "Times New Roman", 18, is_title=True)
+
+        sl_card = ctk.CTkFrame(scr_hdr, fg_color=("#F1F5F9", "#1E293B"), corner_radius=6)
+        sl_card.pack(fill="x", pady=4, padx=4)
+        ctk.CTkLabel(sl_card, text="7. Serial No. Prefix Label", font=ctk.CTkFont(size=11, weight="bold")).pack(anchor="w", padx=8, pady=(6, 2))
+        ent_sl = ctk.CTkEntry(sl_card, height=28, font=ctk.CTkFont(size=11))
+        ent_sl.insert(0, h_data.get('sl_label', 'Sl. No.'))
+        ent_sl.pack(fill="x", padx=8, pady=(0, 6))
+        ent_sl.bind("<KeyRelease>", schedule_live_update)
+        widgets_map['sl_label'] = {'entry': ent_sl}
+
+        # Build Tab 2: Body & Wording
+        scr_body = ctk.CTkScrollableFrame(tab_body, fg_color="transparent")
+        scr_body.pack(fill="both", expand=True, padx=4, pady=4)
+
+        b_box = ctk.CTkFrame(scr_body, fg_color=("#E0F2FE", "#0C4A6E"), corner_radius=6)
+        b_box.pack(fill="x", pady=(2, 8), padx=2)
+        ctk.CTkLabel(b_box, text="⚙️ Common Body Typography (All Sentences)", font=ctk.CTkFont(size=11, weight="bold"), text_color=("#0369A1", "#BAE6FD")).pack(anchor="w", padx=8, pady=(6, 2))
+
+        b_row = ctk.CTkFrame(b_box, fg_color="transparent")
+        b_row.pack(fill="x", padx=8, pady=(0, 8))
+        ctk.CTkLabel(b_row, text="Common Font:", font=ctk.CTkFont(size=10)).pack(side="left", padx=(0, 4))
+        b_font_cur = tmpl_cfg.get('body_font', 'Times New Roman')
+        body_font_var = ctk.StringVar(value=b_font_cur if b_font_cur in FONT_CHOICES else 'Times New Roman')
+        opt_b_font = ctk.CTkOptionMenu(b_row, variable=body_font_var, values=FONT_CHOICES, width=155, height=24, font=ctk.CTkFont(size=10), command=lambda _: schedule_live_update())
+        opt_b_font.pack(side="left", padx=(0, 10))
+
+        ctk.CTkLabel(b_row, text="Size (pt):", font=ctk.CTkFont(size=10)).pack(side="left", padx=(0, 4))
+        b_sz_cur = str(int(round(float(tmpl_cfg.get('body_size', 11)))))
+        body_sz_var = ctk.StringVar(value=b_sz_cur if b_sz_cur in FONT_SIZE_CHOICES else '11')
+        opt_b_sz = ctk.CTkOptionMenu(b_row, variable=body_sz_var, values=FONT_SIZE_CHOICES, width=65, height=24, font=ctk.CTkFont(size=10), command=lambda _: schedule_live_update())
+        opt_b_sz.pack(side="left")
+
+        body_fields_container = ctk.CTkFrame(scr_body, fg_color="transparent")
+        body_fields_container.pack(fill="both", expand=True)
+
+        def rebuild_body_fields():
+            for w in body_fields_container.winfo_children():
+                w.destroy()
+            body_entries_map.clear()
+            c_k = active_cert_var.get().lower()
+            c_data = tmpl_cfg.get('certificates', {}).get(c_k, {})
+
+            FIELD_DEFS = {
+                'provisional': [
+                    ('line_certify', 'Line 1 (Certify):', 'This is to certify that Mr/Miss'),
+                    ('line_parents', 'Line 2 (Father):', 'S/o, D/o Mr.'),
+                    ('line_mother', 'Line 2 (Mother):', '& Mrs.'),
+                    ('line_inhabitant', 'Line 3 (Address):', 'an inhabitant of'),
+                    ('line_exam', 'Line 4 (Exam):', 'appeared the  AISSE/AISSCE  20'),
+                    ('line_roll', 'Line 4 (Roll):', 'bearing Roll No.'),
+                    ('line_board', 'Line 4 (Board end):', 'of Central Board of'),
+                    ('line_decl', 'Line 5 (Result text):', 'Secondary Education, New Delhi was declared to have qualified the said Examination and was placed in the'),
+                    ('line_grade', 'Line 6 (Grade):', 'grade'),
+                    ('line_nic', 'Line 6 (NIC text):', 'as per CBSE result uploaded by National Informatics Centre (NIC), New Delhi.'),
+                    ('line_dob', 'Line 7 (DOB):', 'His/her date of birth according to the school admission record is'),
+                    ('line_reg', 'Line 8 (Reg No):', 'His/Her Registration Number with the CBSE is'),
+                    ('line_result', 'Line 9 (Announced):', 'The result of the said Examination was announced on')
+                ],
+                'character': [
+                    ('line_conduct', 'Line 1 (Conduct):', 'This is to certify that the conduct and character of'),
+                    ('line_student_prefix', 'Line 2 (Prefix):', 'Mr./Miss'),
+                    ('line_status', 'Line 3 (Status):', 'qualified/disqualified the AISSE/AISSCE, 20'),
+                    ('line_board', 'Line 4 (Board):', 'of Central Board of Secondary Education, New Delhi bearing Roll No.'),
+                    ('line_placed', 'Line 5 (Grade Placed):', 'was placed in the grade'),
+                    ('line_nic', 'Line 6 (NIC text):', 'As per CBSE result uploaded by National Informatics Centre (NIC), New Delhi is found'),
+                    ('line_satisfactory', 'Line 7 (Session):', 'satisfactory during the academic session 20')
+                ],
+                'transfer': [
+                    ('line_certify', 'Line 1 (Certify):', 'This is to certify that Mr/Miss'),
+                    ('line_parents', 'Line 2 (Father):', 'S/o, D/o Mr.'),
+                    ('line_mother', 'Line 2 (Mother):', '& Mrs.'),
+                    ('line_status', 'Line 3 (Status):', 'was declared to have qualified/disqualified the AISSE/AISSCE, 20'),
+                    ('line_board', 'Line 3 (Board end):', 'of Central Board of Secondary'),
+                    ('line_roll', 'Line 4 (Roll):', 'Education, New Delhi, bearing Roll No.'),
+                    ('line_placed', 'Line 4 (Grade):', 'was placed in the grade'),
+                    ('line_nic', 'Line 5 (NIC/Dues):', 'as per CBSE result list uploaded by National Informatics Centre (NIC), New Delhi. He/She has cleared'),
+                    ('line_dues', 'Line 6 (Session):', 'fees/dues payable to this institute during the academic session'),
+                    ('line_dob', 'Line 7 (DOB):', 'His/Her date of birth according to the school admission record is'),
+                    ('line_reg', 'Line 8 (Reg No):', 'His/Her Registration Number with the CBSE is'),
+                    ('line_left', 'Line 9 (Left Date):', 'He/She left this school on'),
+                    ('line_pen', 'Line 10 (PEN No):', 'His/Her PEN No.'),
+                    ('reasons_title', 'Reasons Title:', 'REASONS OF LEAVING:'),
+                    ('wish_text', 'Wish Line:', 'We wish him/her a bright future.')
+                ],
+                'reading': [
+                    ('line_certify', 'Line 1 (Certify):', 'This is to certify that Mr/Miss'),
+                    ('line_parents', 'Line 2 (Father):', 'S/o, D/o Mr.'),
+                    ('line_mother', 'Line 2 (Mother):', '& Mrs.'),
+                    ('line_inhabitant', 'Line 3 (Address):', 'an inhabitant of'),
+                    ('line_reading', 'Line 4 (Class):', 'is reading in class'),
+                    ('line_stream', 'Line 4 (Stream):', 'Stream'),
+                    ('line_section', 'Line 4 (Section):', 'Section'),
+                    ('line_roll', 'Line 4 (Class Roll):', 'bearing class Roll No.'),
+                    ('line_session', 'Line 5 (Session):', 'of this School during the academic session 20'),
+                    ('line_dob', 'Line 6 (DOB):', 'His/Her date of birth as recorded in the school registered is'),
+                    ('line_character', 'Line 7 (Character):', 'He/She bears a good moral character.')
+                ]
+            }
+
+            for key, label, def_val in FIELD_DEFS.get(c_k, []):
+                f = ctk.CTkFrame(body_fields_container, fg_color="transparent")
+                f.pack(fill="x", pady=2)
+                ctk.CTkLabel(f, text=label, width=150, anchor="w", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left")
+                ent = ctk.CTkEntry(f, font=ctk.CTkFont(size=11), height=26)
+                ent.insert(0, str(c_data.get(key, def_val)))
+                ent.pack(side="left", fill="x", expand=True)
+                ent.bind("<KeyRelease>", schedule_live_update)
+                body_entries_map[key] = ent
+
+        rebuild_body_fields()
+
+        # Build Tab 3: Footer & Signatures
+        scr_foot = ctk.CTkScrollableFrame(tab_foot, fg_color="transparent")
+        scr_foot.pack(fill="both", expand=True, padx=4, pady=4)
+
+        f_box = ctk.CTkFrame(scr_foot, fg_color=("#FEF3C7", "#78350F"), corner_radius=6)
+        f_box.pack(fill="x", pady=(2, 8), padx=2)
+        ctk.CTkLabel(f_box, text="⚙️ Common Footer Typography", font=ctk.CTkFont(size=11, weight="bold"), text_color=("#92400E", "#FDE68A")).pack(anchor="w", padx=8, pady=(6, 2))
+
+        f_row = ctk.CTkFrame(f_box, fg_color="transparent")
+        f_row.pack(fill="x", padx=8, pady=(0, 8))
+        ctk.CTkLabel(f_row, text="Common Font:", font=ctk.CTkFont(size=10)).pack(side="left", padx=(0, 4))
+        f_font_cur = tmpl_cfg.get('footer', {}).get('footer_font', 'Times New Roman')
+        foot_font_var = ctk.StringVar(value=f_font_cur if f_font_cur in FONT_CHOICES else 'Times New Roman')
+        opt_f_font = ctk.CTkOptionMenu(f_row, variable=foot_font_var, values=FONT_CHOICES, width=155, height=24, font=ctk.CTkFont(size=10), command=lambda _: schedule_live_update())
+        opt_f_font.pack(side="left", padx=(0, 10))
+
+        ctk.CTkLabel(f_row, text="Size (pt):", font=ctk.CTkFont(size=10)).pack(side="left", padx=(0, 4))
+        f_sz_cur = str(int(round(float(tmpl_cfg.get('footer', {}).get('footer_size', 11)))))
+        foot_sz_var = ctk.StringVar(value=f_sz_cur if f_sz_cur in FONT_SIZE_CHOICES else '11')
+        opt_f_sz = ctk.CTkOptionMenu(f_row, variable=foot_sz_var, values=FONT_SIZE_CHOICES, width=65, height=24, font=ctk.CTkFont(size=10), command=lambda _: schedule_live_update())
+        opt_f_sz.pack(side="left")
+
+        f_data = tmpl_cfg.get('footer', {})
+        def add_foot_field(label, key, def_val):
+            f = ctk.CTkFrame(scr_foot, fg_color="transparent")
+            f.pack(fill="x", pady=4, padx=4)
+            ctk.CTkLabel(f, text=label, width=170, anchor="w", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left")
+            ent = ctk.CTkEntry(f, height=28, font=ctk.CTkFont(size=11))
+            ent.insert(0, str(f_data.get(key, def_val)))
+            ent.pack(side="left", fill="x", expand=True)
+            ent.bind("<KeyRelease>", schedule_live_update)
+            widgets_map[f"footer_{key}"] = {'entry': ent}
+
+        add_foot_field("Date Prefix Label:", "date_prefix", "Dated, Senapati")
+        add_foot_field("Date Underline Label:", "date_label", "The")
+        add_foot_field("Principal Sign Title:", "principal_title", "Principal,")
+        add_foot_field("Principal School Name:", "school_footer", "Mount Everest Hr. Sec. School")
+
+        # Working copy of positions for interactive drag & drop alignment
+        tmpl_positions = copy.deepcopy(self.admin_positions if hasattr(self, 'admin_positions') and self.admin_positions else load_positions())
+        selected_field = [None]
+        drag_data = {"start_x": 0, "start_y": 0, "field_start_x": 0, "field_start_y": 0, "active": False}
+        editor_zoom = [0.0]  # 0.0 means Auto-Fit to container
+        current_disp_size = [640, 480]
+        current_scale_val = [0.22]
+        canvas_origin = [0, 0]
+        preview_photo_ref = [None]
+
+        # --- RIGHT VISUAL PREVIEW & DRAG-AND-DROP CANVAS ---
+        right_col = ctk.CTkFrame(main_split, fg_color=("#F8FAFC", "#0F172A"), corner_radius=6)
+        right_col.pack(side="right", fill="both", expand=True, padx=(6, 0))
+
+        r_top = ctk.CTkFrame(right_col, fg_color=("#E2E8F0", "#1E293B"), corner_radius=4, height=36)
+        r_top.pack(fill="x", padx=6, pady=(6, 2))
+
+        ctk.CTkLabel(
+            r_top,
+            text="👁️ Live Preview & Calibration",
+            font=ctk.CTkFont(size=11, weight="bold")
+        ).pack(side="left", padx=(8, 4))
+
+        field_var = ctk.StringVar(value="Select Field...")
+
+        def get_field_label(c_k, f_key):
+            for k, lbl, _ in FIELD_METADATA.get(c_k, []):
+                if k == f_key:
+                    return lbl
+            return f_key.replace('_', ' ').title()
+
+        def update_status_label(f_key, x, y):
+            c_k = active_cert_var.get().lower()
+            lbl = get_field_label(c_k, f_key)
+            lbl_coord_status.configure(
+                text=f"🎯 Selected: {lbl}  |  X = {int(x)}, Y = {int(y)}  |  💡 Drag to reposition or use arrow keys"
+            )
+
+        def on_field_dropdown_selected(val_label):
+            c_k = active_cert_var.get().lower()
+            for k, lbl, _ in FIELD_METADATA.get(c_k, []):
+                if lbl == val_label:
+                    selected_field[0] = k
+                    if not show_sample_var.get():
+                        show_sample_var.set(True)
+                    cur = tmpl_positions.get(c_k, {}).get(k, (0, 0))
+                    update_status_label(k, cur[0], cur[1])
+                    _render_live_canvas()
+                    break
+
+        opt_field_selector = ctk.CTkOptionMenu(
+            r_top,
+            variable=field_var,
+            width=175,
+            height=25,
+            font=ctk.CTkFont(size=10),
+            command=on_field_dropdown_selected
+        )
+        opt_field_selector.pack(side="left", padx=4)
+
+        def refresh_field_dropdown():
+            c_k = active_cert_var.get().lower()
+            meta = FIELD_METADATA.get(c_k, [])
+            labels = [lbl for _, lbl, _ in meta]
+            if labels:
+                opt_field_selector.configure(values=labels)
+                if selected_field[0]:
+                    field_var.set(get_field_label(c_k, selected_field[0]))
+                else:
+                    field_var.set("Select Field...")
+            else:
+                opt_field_selector.configure(values=["-- No fields --"])
+
+        # Zoom Controls
+        def editor_zoom_in():
+            base = editor_zoom[0] if editor_zoom[0] > 0 else current_scale_val[0]
+            editor_zoom[0] = min(1.5, base + 0.1)
+            lbl_zoom.configure(text=f"{int(editor_zoom[0]*100)}%")
+            _render_live_canvas()
+
+        def editor_zoom_out():
+            base = editor_zoom[0] if editor_zoom[0] > 0 else current_scale_val[0]
+            editor_zoom[0] = max(0.20, base - 0.1)
+            lbl_zoom.configure(text=f"{int(editor_zoom[0]*100)}%")
+            _render_live_canvas()
+
+        def editor_zoom_fit():
+            editor_zoom[0] = 0.0
+            lbl_zoom.configure(text="Fit")
+            _render_live_canvas()
+
+        zoom_frame = ctk.CTkFrame(r_top, fg_color="transparent")
+        zoom_frame.pack(side="left", padx=4)
+        ctk.CTkButton(zoom_frame, text="🔍 -", width=30, height=24, font=ctk.CTkFont(size=10), command=editor_zoom_out).pack(side="left", padx=1)
+        lbl_zoom = ctk.CTkLabel(zoom_frame, text="Fit", width=36, font=ctk.CTkFont(size=10, weight="bold"))
+        lbl_zoom.pack(side="left", padx=1)
+        ctk.CTkButton(zoom_frame, text="🔍 +", width=30, height=24, font=ctk.CTkFont(size=10), command=editor_zoom_in).pack(side="left", padx=1)
+        ctk.CTkButton(zoom_frame, text="Fit", width=32, height=24, font=ctk.CTkFont(size=10), command=editor_zoom_fit).pack(side="left", padx=1)
+
+        show_sample_var = ctk.BooleanVar(value=True)
+        chk_sample = ctk.CTkCheckBox(
+            r_top,
+            text="Overlay Sample Data",
+            variable=show_sample_var,
+            font=ctk.CTkFont(size=10),
+            command=schedule_live_update
+        )
+        chk_sample.pack(side="right", padx=6)
+
+        # Status & Hint Strip
+        stat_bar = ctk.CTkFrame(right_col, fg_color=("#F1F5F9", "#1E293B"), corner_radius=4, height=24)
+        stat_bar.pack(fill="x", padx=6, pady=(0, 4))
+        lbl_coord_status = ctk.CTkLabel(
+            stat_bar,
+            text="💡 Click & drag any field on preview to reposition. Arrow keys (← ↑ → ↓) nudge 1px (Shift+arrow 5px).",
+            font=ctk.CTkFont(size=10),
+            text_color=("#0284C7", "#38BDF8")
+        )
+        lbl_coord_status.pack(side="left", padx=8, pady=1)
+
+        # Scrollable Canvas for Interactive Drag & Drop
+        canvas_container = ctk.CTkFrame(right_col, fg_color="transparent")
+        canvas_container.pack(fill="both", expand=True, padx=6, pady=(0, 6))
+
+        tmpl_canvas = tk.Canvas(
+            canvas_container,
+            bg="#1E293B" if ctk.get_appearance_mode() == "Dark" else "#E2E8F0",
+            highlightthickness=0
+        )
+        v_bar = ttk.Scrollbar(canvas_container, orient="vertical", command=tmpl_canvas.yview)
+        h_bar = ttk.Scrollbar(canvas_container, orient="horizontal", command=tmpl_canvas.xview)
+        tmpl_canvas.configure(xscrollcommand=h_bar.set, yscrollcommand=v_bar.set)
+
+        v_bar.pack(side="right", fill="y")
+        h_bar.pack(side="bottom", fill="x")
+        tmpl_canvas.pack(side="left", fill="both", expand=True)
+
+        def on_canvas_press(event):
+            disp_w = current_disp_size[0]
+            disp_h = current_disp_size[1]
+            if disp_w <= 0 or disp_h <= 0:
+                return
+
+            cx = tmpl_canvas.canvasx(event.x)
+            cy = tmpl_canvas.canvasy(event.y)
+
+            off_x = canvas_origin[0]
+            off_y = canvas_origin[1]
+
+            click_img_x = ((cx - off_x) / disp_w) * IMG_W
+            click_img_y = ((cy - off_y) / disp_h) * IMG_H
+
+            c_k = active_cert_var.get().lower()
+            cert_positions = tmpl_positions.get(c_k, {})
+            closest_field = None
+            min_dist = float("inf")
+
+            for f_key, coords in cert_positions.items():
+                if len(coords) == 2:
+                    fx, fy = coords
+                elif len(coords) == 4:
+                    fx = (coords[0] + coords[2]) / 2.0
+                    fy = (coords[1] + coords[3]) / 2.0
+                else:
+                    continue
+                dist = (click_img_x - fx)**2 + (click_img_y - fy)**2
+                if dist < min_dist:
+                    min_dist = dist
+                    closest_field = f_key
+
+            if closest_field and min_dist < (380 ** 2):
+                selected_field[0] = closest_field
+                if not show_sample_var.get():
+                    show_sample_var.set(True)
+                field_var.set(get_field_label(c_k, closest_field))
+                cur_coords = cert_positions.get(closest_field, (0, 0))
+                drag_data["start_x"] = cx
+                drag_data["start_y"] = cy
+                drag_data["field_start_x"] = cur_coords[0]
+                drag_data["field_start_y"] = cur_coords[1]
+                drag_data["active"] = True
+                update_status_label(closest_field, cur_coords[0], cur_coords[1])
+                _render_live_canvas()
+            else:
+                drag_data["active"] = False
+
+        def on_canvas_drag(event):
+            if not drag_data["active"] or not selected_field[0]:
+                return
+            disp_w = current_disp_size[0]
+            disp_h = current_disp_size[1]
+            if disp_w <= 0 or disp_h <= 0:
+                return
+
+            cx = tmpl_canvas.canvasx(event.x)
+            cy = tmpl_canvas.canvasy(event.y)
+
+            delta_canvas_x = cx - drag_data["start_x"]
+            delta_canvas_y = cy - drag_data["start_y"]
+
+            delta_img_x = (delta_canvas_x / disp_w) * IMG_W
+            delta_img_y = (delta_canvas_y / disp_h) * IMG_H
+
+            new_x = int(round(max(0, min(IMG_W, drag_data["field_start_x"] + delta_img_x))))
+            new_y = int(round(max(0, min(IMG_H, drag_data["field_start_y"] + delta_img_y))))
+
+            c_k = active_cert_var.get().lower()
+            if c_k in tmpl_positions and selected_field[0] in tmpl_positions[c_k]:
+                coords = tmpl_positions[c_k][selected_field[0]]
+                if len(coords) == 4:
+                    x_len = coords[2] - coords[0]
+                    y_len = coords[3] - coords[1]
+                    tmpl_positions[c_k][selected_field[0]] = (new_x, new_y, new_x + x_len, new_y + y_len)
+                else:
+                    tmpl_positions[c_k][selected_field[0]] = (new_x, new_y)
+                update_status_label(selected_field[0], new_x, new_y)
+                _render_live_canvas()
+
+        def on_canvas_release(event):
+            drag_data["active"] = False
+
+        tmpl_canvas.bind("<ButtonPress-1>", on_canvas_press)
+        tmpl_canvas.bind("<B1-Motion>", on_canvas_drag)
+        tmpl_canvas.bind("<ButtonRelease-1>", on_canvas_release)
+
+        # Keyboard Arrow Nudge
+        def nudge_field(dx_sign, dy_sign, event):
+            focused = win.focus_get()
+            if focused and isinstance(focused, (tk.Entry, ttk.Entry, ctk.CTkEntry)):
+                return
+            if not selected_field[0]:
+                return
+            c_k = active_cert_var.get().lower()
+            if c_k not in tmpl_positions or selected_field[0] not in tmpl_positions[c_k]:
+                return
+            mult = 5 if (event.state & 0x0001) else 1
+            coords = tmpl_positions[c_k][selected_field[0]]
+            cur_x, cur_y = coords[0], coords[1]
+            new_x = int(round(max(0, min(IMG_W, cur_x + dx_sign * mult))))
+            new_y = int(round(max(0, min(IMG_H, cur_y + dy_sign * mult))))
+            if len(coords) == 4:
+                x_len = coords[2] - coords[0]
+                y_len = coords[3] - coords[1]
+                tmpl_positions[c_k][selected_field[0]] = (new_x, new_y, new_x + x_len, new_y + y_len)
+            else:
+                tmpl_positions[c_k][selected_field[0]] = (new_x, new_y)
+            update_status_label(selected_field[0], new_x, new_y)
+            _render_live_canvas()
+
+        win.bind("<Left>", lambda e: nudge_field(-1, 0, e))
+        win.bind("<Right>", lambda e: nudge_field(1, 0, e))
+        win.bind("<Up>", lambda e: nudge_field(0, -1, e))
+        win.bind("<Down>", lambda e: nudge_field(0, 1, e))
+
+        def _sync_ui_to_cfg():
+            c_k = active_cert_var.get().lower()
+            if 'header' not in tmpl_cfg: tmpl_cfg['header'] = {}
+            for k in ['office', 'school', 'sub', 'affiliation', 'affiliation_no']:
+                if k in widgets_map:
+                    info = widgets_map[k]
+                    val = info['entry'].get().strip()
+                    font_val = info['font_var'].get()
+                    sz_val = float(info['sz_var'].get())
+                    k_text = f"{k}_title" if k == 'office' else (f"{k}_line" if k == 'affiliation' else (f"{k}_no" if k == 'affiliation_no' else (k + '_name' if k == 'school' else k)))
+                    if k == 'sub': k_text = 'sub_title'
+                    tmpl_cfg['header'][k_text] = val
+                    tmpl_cfg['header'][f"{k}_font"] = font_val
+                    tmpl_cfg['header'][f"{k}_size"] = sz_val
+
+            if 'sl_label' in widgets_map:
+                tmpl_cfg['header']['sl_label'] = widgets_map['sl_label']['entry'].get().strip()
+
+            if 'title' in widgets_map:
+                t_info = widgets_map['title']
+                if 'certificates' not in tmpl_cfg: tmpl_cfg['certificates'] = {}
+                if c_k not in tmpl_cfg['certificates']: tmpl_cfg['certificates'][c_k] = {}
+                tmpl_cfg['certificates'][c_k]['title'] = t_info['entry'].get().strip()
+                tmpl_cfg['certificates'][c_k]['title_font'] = t_info['font_var'].get()
+                tmpl_cfg['certificates'][c_k]['title_size'] = float(t_info['sz_var'].get())
+
+            tmpl_cfg['body_font'] = body_font_var.get()
+            tmpl_cfg['body_size'] = float(body_sz_var.get())
+
+            if 'certificates' not in tmpl_cfg: tmpl_cfg['certificates'] = {}
+            if c_k not in tmpl_cfg['certificates']: tmpl_cfg['certificates'][c_k] = {}
+            for b_key, b_ent in body_entries_map.items():
+                tmpl_cfg['certificates'][c_k][b_key] = b_ent.get().strip()
+
+            if 'footer' not in tmpl_cfg: tmpl_cfg['footer'] = {}
+            tmpl_cfg['footer']['footer_font'] = foot_font_var.get()
+            tmpl_cfg['footer']['footer_size'] = float(foot_sz_var.get())
+            for fk in ['date_prefix', 'date_label', 'principal_title', 'school_footer']:
+                w_key = f"footer_{fk}"
+                if w_key in widgets_map:
+                    tmpl_cfg['footer'][fk] = widgets_map[w_key]['entry'].get().strip()
+
+        def _render_live_canvas():
+            c_k = active_cert_var.get().lower()
+            try:
+                if show_sample_var.get():
+                    sample_d = ADMIN_SAMPLE_DATA.get(c_k, {}).copy()
+                    img = self.renderer.render_pil(
+                        sample_d,
+                        mode='full',
+                        cert_type=c_k,
+                        config=self.config,
+                        highlight_field=selected_field[0],
+                        show_crosshairs=bool(selected_field[0]),
+                        custom_positions_override=tmpl_positions,
+                        custom_template_config=tmpl_cfg
+                    )
+                else:
+                    img = render_vector_template_pil(c_k, self.renderer, custom_tmpl_cfg=tmpl_cfg)
+
+                win.update_idletasks()
+                avail_w = canvas_container.winfo_width() or 640
+                avail_h = canvas_container.winfo_height() or 480
+                if avail_w < 100: avail_w = 640
+                if avail_h < 100: avail_h = 480
+
+                if editor_zoom[0] > 0:
+                    scale = editor_zoom[0]
+                else:
+                    scale_w = avail_w / 3000.0
+                    scale_h = avail_h / 2250.0
+                    scale = min(scale_w, scale_h) * 0.96
+
+                disp_w = max(100, int(3000 * scale))
+                disp_h = max(75, int(2250 * scale))
+
+                current_scale_val[0] = scale
+                current_disp_size[0] = disp_w
+                current_disp_size[1] = disp_h
+
+                img_disp = img.resize((disp_w, disp_h), Image.Resampling.BILINEAR)
+                photo = ImageTk.PhotoImage(img_disp)
+
+                tmpl_canvas.delete("all")
+                off_x = max(0, (avail_w - disp_w) // 2) if editor_zoom[0] <= 0 else 0
+                off_y = max(0, (avail_h - disp_h) // 2) if editor_zoom[0] <= 0 else 0
+                canvas_origin[0] = off_x
+                canvas_origin[1] = off_y
+
+                tmpl_canvas.create_image(off_x, off_y, anchor="nw", image=photo)
+                tmpl_canvas.config(scrollregion=(0, 0, disp_w + off_x * 2, disp_h + off_y * 2))
+                preview_photo_ref[0] = photo
+            except Exception as e:
+                print(f"Template visual preview error: {e}")
+
+        def on_cert_switch(val):
+            _sync_ui_to_cfg()
+            active_cert_var.set(val)
+            c_k = val.lower()
+            selected_field[0] = None
+            refresh_field_dropdown()
+            lbl_coord_status.configure(
+                text="💡 Click & drag any field on preview to reposition. Arrow keys (← ↑ → ↓) nudge 1px (Shift+arrow 5px)."
+            )
+            c_info = tmpl_cfg.get('certificates', {}).get(c_k, {})
+            if 'title' in widgets_map:
+                widgets_map['title']['entry'].delete(0, "end")
+                widgets_map['title']['entry'].insert(0, c_info.get('title', val.capitalize() + ' Certificate'))
+                widgets_map['title']['font_var'].set(c_info.get('title_font', 'Times New Roman'))
+                widgets_map['title']['sz_var'].set(str(int(round(float(c_info.get('title_size', 18))))))
+            rebuild_body_fields()
+            schedule_live_update()
+
+        seg_cert = ctk.CTkSegmentedButton(
+            cert_switch_box,
+            values=["Provisional", "Character", "Transfer", "Reading"],
+            command=on_cert_switch
+        )
+        seg_cert.set("Provisional")
+        seg_cert.pack(side="left")
+
+        refresh_field_dropdown()
+        win.after(100, _render_live_canvas)
+
+        # Bottom Action Bar
+        bot_bar = ctk.CTkFrame(win, fg_color=("#F1F5F9", "#0F172A"), corner_radius=0, height=52)
+        bot_bar.pack(fill="x", side="bottom")
+
+        chk_vec = ctk.CTkCheckBox(bot_bar, text="Enable Editable Vector Template (instead of static PNG)", font=ctk.CTkFont(size=11, weight="bold"))
+        if self.config.get("use_editable_template", True):
+            chk_vec.select()
+        else:
+            chk_vec.deselect()
+        chk_vec.pack(side="left", padx=16, pady=12)
+
+        def save_edits():
+            _sync_ui_to_cfg()
+            tmpl_cfg['use_editable_template'] = bool(chk_vec.get())
+            save_template_config(tmpl_cfg)
+            self.config['use_editable_template'] = bool(chk_vec.get())
+            if hasattr(self, 'use_editable_tmpl_var'):
+                self.use_editable_tmpl_var.set(bool(chk_vec.get()))
+            save_config(self.config)
+
+            # Save adjusted field positions from drag-and-drop
+            save_positions(tmpl_positions)
+            self.admin_positions = copy.deepcopy(tmpl_positions)
+            if hasattr(self.renderer, 'reload_positions'):
+                self.renderer.reload_positions()
+            self.update_preview()
+            if hasattr(self, '_sync_admin_field_controls'):
+                self._sync_admin_field_controls()
+            if hasattr(self, '_refresh_admin_fields_table'):
+                self._refresh_admin_fields_table()
+            if hasattr(self, '_update_admin_preview'):
+                self._update_admin_preview()
+
+            messagebox.showinfo("Saved", "Certificate template text, fonts, and field alignments updated successfully!", parent=win)
+            win.destroy()
+
+        def reset_defaults():
+            confirm = messagebox.askyesno("Reset Template", "Are you sure you want to restore default Mount Everest certificate wording and typography?", parent=win)
+            if confirm:
+                cfg_def = reset_template_config()
+                self.config['use_editable_template'] = True
+                save_config(self.config)
+                self.update_preview()
+                messagebox.showinfo("Reset Complete", "Default certificate wording and typography restored!", parent=win)
+                win.destroy()
+                self._open_template_editor_dialog()
+
+        ctk.CTkButton(bot_bar, text="💾 Save Changes & Apply", font=ctk.CTkFont(size=12, weight="bold"), fg_color="#059669", hover_color="#047857", height=32, command=save_edits).pack(side="right", padx=16, pady=10)
+        ctk.CTkButton(bot_bar, text="🔄 Reset Defaults", font=ctk.CTkFont(size=11), fg_color=("#475569", "#334155"), height=32, command=reset_defaults).pack(side="right", padx=4, pady=10)
+        ctk.CTkButton(bot_bar, text="Close", font=ctk.CTkFont(size=11), fg_color="transparent", text_color=("#475569", "#94A3B8"), height=32, command=win.destroy).pack(side="right", padx=4, pady=10)
+
 
 def main():
     app = CertificateApp()

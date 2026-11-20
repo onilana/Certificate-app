@@ -1,0 +1,15 @@
+# Previews and local preview scripts
+previews/
+preview.py
+*preview*
+*.preview.*
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Generated output certificates and test PDFs
+Output_Certificates/
+*.pdf
+*.log

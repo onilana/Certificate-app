@@ -9,6 +9,8 @@ from reportlab.lib.colors import HexColor
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from path_utils import get_base_dir, get_asset_path
+from vector_template_renderer import render_vector_template_pil, draw_vector_template_pdf
+from template_manager import load_template_config
 
 TEMPLATES_DIR = get_asset_path('assets', 'templates')
 POSITIONS_FILE = os.path.join(get_base_dir(), 'custom_positions.json')
@@ -58,8 +60,8 @@ DEFAULT_POSITIONS = {
         'reg_no': (1540, 1677),
         'result_date': (1580, 1764),
         'issue_date': (360, 2024),
-        'aisse': (643, 1315, 795, 1315),
-        'aissce': (815, 1315, 996, 1315),
+        'aisse': (467, 1315, 589, 1315),
+        'aissce': (602, 1315, 753, 1315),
     },
     'character': {
         'sl_no': (500, 834),
@@ -68,11 +70,11 @@ DEFAULT_POSITIONS = {
         'roll_no': (1410, 1519),
         'grade': (260, 1623),
         'session': (1310, 1728),
-        'issue_date': (350, 1984),
-        'aisse': (687, 1400, 860, 1400),
-        'aissce': (880, 1400, 1081, 1400),
-        'qualified': (2480, 1295, 2712, 1295),
-        'disqualified': (251, 1400, 526, 1400)
+        'issue_date': (360, 2024),
+        'aisse': (515, 1400, 637, 1400),
+        'aissce': (650, 1400, 801, 1400),
+        'qualified': (2600, 1295, 2758, 1295),
+        'disqualified': (230, 1400, 439, 1400)
     },
     'transfer': {
         'sl_no': (545, 706),
@@ -87,11 +89,11 @@ DEFAULT_POSITIONS = {
         'reg_no': (1540, 1540),
         'left_date': (1050, 1622),
         'pen_no': (865, 1703),
-        'issue_date': (1350, 2007),
-        'aisse': (1385, 1120, 1540, 1120),
-        'aissce': (1560, 1120, 1752, 1120),
-        'qualified': (793, 1120, 985, 1120),
-        'disqualified': (1000, 1120, 1292, 1120)
+        'issue_date': (360, 2024),
+        'aisse': (1068, 1120, 1190, 1120),
+        'aissce': (1203, 1120, 1354, 1120),
+        'qualified': (612, 1120, 770, 1120),
+        'disqualified': (783, 1120, 992, 1120)
     },
     'reading': {
         'sl_no': (535, 755),
@@ -115,7 +117,7 @@ def compute_sl_no(cert_type: str, reg_no: str = "", stream: str = "", section: s
     1. Provisional: exact last 3 digit of registration
     2. Character: exact last 3 digit of registration
     3. Transfer: exact last 3 digit of registration
-    4. Reading Certificate: Exact from Stream (If Science take Sc, if Arts, take AR, if Commerce, take Co), Section & Class Roll (e.g. Sc/A/18)
+    4. Reading Certificate: Exact from Stream (If Science take Sc, if Arts, take Ar, if Commerce, take Co), Section & Class Roll (e.g. Sc/A/18)
     """
     ctype = str(cert_type or '').strip().lower()
     if ctype in ('provisional', 'character', 'transfer', 'all', ''):
@@ -431,6 +433,11 @@ def get_page_dimensions(config: dict = None) -> tuple[float, float]:
 class CertificateRenderer:
     def __init__(self):
         self._load_fonts()
+
+    def reload_positions(self):
+        global POSITIONS
+        POSITIONS = load_positions()
+        return POSITIONS
         
     def _load_fonts(self):
         windir = os.environ.get('WINDIR', 'C:\\Windows')
@@ -456,13 +463,26 @@ class CertificateRenderer:
         self.font_souvenir_l = find_font('SOUVNRL.TTF')
         self.font_souvenir_d = find_font('SOUVNRD.TTF')
         self.font_commercial_script = find_font('COMSCRTN.TTF')
+        self.font_casmira = find_font('casmira.ttf') or find_font('casmira.TTF')
+        self.font_arial = find_font('arial.ttf') or find_font('ARIAL.TTF')
+        self.font_georgia = find_font('georgia.ttf') or find_font('GEORGIA.TTF')
 
-        # Register CommercialScriptBT & Souvenir fonts with ReportLab
+        # Register CommercialScriptBT, Souvenir, Casmira, Arial, Georgia fonts with ReportLab
         try:
+            if self.font_casmira:
+                for alias in ('Casmira', 'casmira', 'Casmira Regular', 'Casmira-Regular'):
+                    if alias not in pdfmetrics.getRegisteredFontNames():
+                        pdfmetrics.registerFont(TTFont(alias, self.font_casmira))
+
             if self.font_commercial_script:
                 for alias in ('CommercialScriptBT', 'CommercialScript BT', 'CommercialScriptBT Regular', 'Commercial Script BT', 'CommercialScript'):
                     if alias not in pdfmetrics.getRegisteredFontNames():
                         pdfmetrics.registerFont(TTFont(alias, self.font_commercial_script))
+
+            if self.font_arial and 'Arial' not in pdfmetrics.getRegisteredFontNames():
+                pdfmetrics.registerFont(TTFont('Arial', self.font_arial))
+            if self.font_georgia and 'Georgia' not in pdfmetrics.getRegisteredFontNames():
+                pdfmetrics.registerFont(TTFont('Georgia', self.font_georgia))
 
             if self.font_souvenir_li and 'Souvenir-Lt-Italic' not in pdfmetrics.getRegisteredFontNames():
                 pdfmetrics.registerFont(TTFont('Souvenir-Lt-Italic', self.font_souvenir_li))
@@ -475,28 +495,48 @@ class CertificateRenderer:
         except Exception as e:
             print(f"Font registration warning: {e}")
 
+    def get_reportlab_font(self, family: str, bold: bool = False, italic: bool = False) -> str:
+        """Returns the appropriate registered ReportLab font name for a requested family and style."""
+        fam = str(family or '').strip().lower()
+        reg = pdfmetrics.getRegisteredFontNames()
+        if 'casmira' in fam and 'Casmira' in reg:
+            return 'Casmira'
+        if ('commercial' in fam or 'comscrt' in fam) and 'CommercialScriptBT' in reg:
+            return 'CommercialScriptBT'
+        if 'arial' in fam and 'Arial' in reg:
+            return 'Arial'
+        if 'georgia' in fam and 'Georgia' in reg:
+            return 'Georgia'
+        if 'souvenir' in fam:
+            if bold and italic and 'Souvenir-Demi-Italic' in reg: return 'Souvenir-Demi-Italic'
+            if italic and 'Souvenir-Lt-Italic' in reg: return 'Souvenir-Lt-Italic'
+            if bold and 'Souvenir-Demi' in reg: return 'Souvenir-Demi'
+            if 'Souvenir-Lt' in reg: return 'Souvenir-Lt'
+        if bold and italic: return 'Times-BoldItalic'
+        if bold: return 'Times-Bold'
+        if italic: return 'Times-Italic'
+        return 'Times-Roman'
+
     def get_pil_font(self, size=40, bold=False, italic=True, font_family=None):
         family = str(font_family or '').strip().lower()
-        if 'commercial' in family or 'comscrt' in family:
-            if self.font_commercial_script and os.path.exists(self.font_commercial_script):
-                try:
-                    return ImageFont.truetype(self.font_commercial_script, size)
-                except Exception:
-                    pass
-
         fpath = None
-        if italic and bold and self.font_souvenir_di:
-            fpath = self.font_souvenir_di
-        elif italic and self.font_souvenir_li:
-            fpath = self.font_souvenir_li
-        elif bold and self.font_souvenir_d:
-            fpath = self.font_souvenir_d
-        elif self.font_souvenir_l:
-            fpath = self.font_souvenir_l
-        elif bold and self.font_times_bd:
-            fpath = self.font_times_bd
-        elif self.font_times:
-            fpath = self.font_times
+        if 'casmira' in family:
+            fpath = getattr(self, 'font_casmira', None)
+        elif 'commercial' in family or 'comscrt' in family:
+            fpath = getattr(self, 'font_commercial_script', None)
+        elif 'arial' in family:
+            fpath = getattr(self, 'font_arial', None)
+        elif 'georgia' in family:
+            fpath = getattr(self, 'font_georgia', None)
+        elif 'souvenir' in family:
+            if italic and bold and self.font_souvenir_di: fpath = self.font_souvenir_di
+            elif italic and self.font_souvenir_li: fpath = self.font_souvenir_li
+            elif bold and self.font_souvenir_d: fpath = self.font_souvenir_d
+            elif self.font_souvenir_l: fpath = self.font_souvenir_l
+
+        if not fpath:
+            if bold and self.font_times_bd: fpath = self.font_times_bd
+            elif self.font_times: fpath = self.font_times
 
         if fpath and os.path.exists(fpath):
             try:
@@ -506,7 +546,8 @@ class CertificateRenderer:
         return ImageFont.load_default()
 
     def render_pil(self, data: dict, mode: str = "full", cert_type: str = "provisional", config: dict = None,
-                   highlight_field: str = None, show_crosshairs: bool = False, custom_positions_override: dict = None) -> Image.Image:
+                   highlight_field: str = None, show_crosshairs: bool = False, custom_positions_override: dict = None,
+                   custom_template_config: dict = None) -> Image.Image:
         """
         Renders any of the 4 certificates as a high-resolution PIL Image.
         Uses exact baseline text alignment (`anchor='ls'`).
@@ -535,9 +576,15 @@ class CertificateRenderer:
         is_bold = cfg.get('is_bold', False)
         is_italic = cfg.get('is_italic', True)
 
+        use_editable = cfg.get('use_editable_template', True)
         template_path = t_info['template']
-        if mode == 'full' and os.path.exists(template_path):
-            img = Image.open(template_path).convert('RGB')
+        if mode == 'full':
+            if use_editable:
+                img = render_vector_template_pil(cert_key, self, custom_tmpl_cfg=custom_template_config)
+            elif os.path.exists(template_path):
+                img = Image.open(template_path).convert('RGB')
+            else:
+                img = Image.new('RGB', (int(IMG_W), int(IMG_H)), (255, 255, 255))
         else:
             img = Image.new('RGB', (int(IMG_W), int(IMG_H)), (255, 255, 255))
             if mode == 'overlay':
@@ -690,9 +737,13 @@ class CertificateRenderer:
                 pos_dict = active_positions.get(c_key, DEFAULT_POSITIONS.get(c_key, {}))
                 t_info = CERT_TYPES.get(c_key, CERT_TYPES['provisional'])
                 tmpl = t_info['template']
+                use_editable = cfg.get('use_editable_template', True)
 
-                if mode == 'full' and os.path.exists(tmpl):
-                    pdf.drawImage(tmpl, 0, 0, width=w, height=h)
+                if mode == 'full':
+                    if use_editable:
+                        draw_vector_template_pdf(pdf, c_key, self, w, h, to_pdf_pt)
+                    elif os.path.exists(tmpl):
+                        pdf.drawImage(tmpl, 0, 0, width=w, height=h)
 
                 def draw_str(key, text, font_override=None, color_override=None):
                     if not text or key not in pos_dict:

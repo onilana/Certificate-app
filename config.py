@@ -31,7 +31,8 @@ DEFAULT_CONFIG = {
     "admin_password": "1234",
     "auto_check_updates": True,
     "update_url": "https://raw.githubusercontent.com/MountEverestHSS/CertificateStudio/main/version.json",
-    "update_network_folder": ""
+    "update_network_folder": "",
+    "use_editable_template": True
 }
 
 def load_config():
