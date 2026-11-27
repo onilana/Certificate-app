@@ -65,16 +65,16 @@ DEFAULT_POSITIONS = {
     },
     'character': {
         'sl_no': (500, 834),
-        'student_name': (480, 1310),
-        'exam_year': (1185, 1415),
-        'roll_no': (1410, 1519),
-        'grade': (260, 1623),
-        'session': (1310, 1728),
+        'student_name': (1620, 1205),
+        'exam_year': (1330, 1310),
+        'roll_no': (650, 1415),
+        'grade': (1820, 1415),
+        'session': (735, 1623),
         'issue_date': (360, 2024),
-        'aisse': (515, 1400, 637, 1400),
-        'aissce': (650, 1400, 801, 1400),
-        'qualified': (2600, 1295, 2758, 1295),
-        'disqualified': (230, 1400, 439, 1400)
+        'aisse': (985, 1295, 1107, 1295),
+        'aissce': (1120, 1295, 1271, 1295),
+        'qualified': (230, 1295, 435, 1295),
+        'disqualified': (445, 1295, 705, 1295)
     },
     'transfer': {
         'sl_no': (545, 706),
@@ -547,7 +547,7 @@ class CertificateRenderer:
 
     def render_pil(self, data: dict, mode: str = "full", cert_type: str = "provisional", config: dict = None,
                    highlight_field: str = None, show_crosshairs: bool = False, custom_positions_override: dict = None,
-                   custom_template_config: dict = None) -> Image.Image:
+                   custom_template_config: dict = None, highlight_template_element: str = None) -> Image.Image:
         """
         Renders any of the 4 certificates as a high-resolution PIL Image.
         Uses exact baseline text alignment (`anchor='ls'`).
@@ -580,7 +580,10 @@ class CertificateRenderer:
         template_path = t_info['template']
         if mode == 'full':
             if use_editable:
-                img = render_vector_template_pil(cert_key, self, custom_tmpl_cfg=custom_template_config)
+                img = render_vector_template_pil(
+                    cert_key, self, custom_tmpl_cfg=custom_template_config,
+                    highlight_element=highlight_template_element
+                )
             elif os.path.exists(template_path):
                 img = Image.open(template_path).convert('RGB')
             else:

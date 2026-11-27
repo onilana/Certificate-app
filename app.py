@@ -26,6 +26,10 @@ from path_utils import get_asset_path, get_base_dir
 from version import APP_VERSION, APP_NAME
 import updater
 from template_manager import load_template_config, save_template_config, reset_template_config
+from vector_template_renderer import (
+    render_vector_template_pil, get_template_element_labels,
+    get_template_element_positions, set_template_element_position
+)
 
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
@@ -70,6 +74,7 @@ class CertificateApp(ctk.CTk):
         self.color_mode_var = ctk.StringVar(value=self.config.get("print_color_mode", "Color"))
         self.prompt_props_var = ctk.BooleanVar(value=True)
         self.current_cert_type = "provisional"
+        self._shared_form_data = {}
         self.output_dir = get_output_dir()
 
         # Printer paper cache
@@ -147,6 +152,123 @@ class CertificateApp(ctk.CTk):
     def _initial_setup(self):
         self._refresh_printer_papers()
         self.update_preview()
+        self._start_live_reload_watcher()
+
+    def _start_live_reload_watcher(self):
+        """Watches source/config files for modifications and refreshes or reloads automatically."""
+        base_dir = get_base_dir()
+        watch_names = ['templates_config.json', 'custom_positions.json']
+        if not getattr(sys, 'frozen', False):
+            watch_names.extend([
+                'vector_template_renderer.py',
+                'template_manager.py',
+                'renderer.py',
+                'config.py',
+                'app.py',
+            ])
+        self._watched_mtimes = {}
+        for name in watch_names:
+            p = os.path.join(base_dir, name)
+            if os.path.exists(p):
+                try:
+                    self._watched_mtimes[name] = os.path.getmtime(p)
+                except OSError:
+                    pass
+        self.after(800, self._poll_live_reload)
+
+    def _poll_live_reload(self):
+        """Polls watched files every 800ms for instant hot-reload on code or config edits."""
+        try:
+            base_dir = get_base_dir()
+            changed = []
+            for name in list(self._watched_mtimes.keys()):
+                p = os.path.join(base_dir, name)
+                if os.path.exists(p):
+                    try:
+                        mt = os.path.getmtime(p)
+                        if mt != self._watched_mtimes[name]:
+                            self._watched_mtimes[name] = mt
+                            changed.append(name)
+                    except OSError:
+                        pass
+
+            if changed:
+                if 'app.py' in changed and not getattr(sys, 'frozen', False):
+                    print("[Hot-Reload] app.py modified — restarting application...")
+                    if hasattr(self, 'tray_manager') and self.tray_manager:
+                        try:
+                            self.tray_manager.stop()
+                        except Exception:
+                            pass
+                    try:
+                        self.destroy()
+                    except Exception:
+                        pass
+                    os.execv(sys.executable, [sys.executable] + sys.argv)
+                    return
+
+                self._hot_reload_modules(changed)
+        except Exception as e:
+            print(f"[Hot-Reload] Watcher warning: {e}")
+
+        if self.winfo_exists():
+            self.after(800, self._poll_live_reload)
+
+    def _hot_reload_modules(self, changed_files):
+        """Reloads modified Python modules/configs in-place and refreshes all previews."""
+        import importlib
+        import template_manager
+        import vector_template_renderer
+        import renderer as renderer_mod
+        import config as config_mod
+
+        py_changed = any(f.endswith('.py') for f in changed_files)
+        if py_changed:
+            try:
+                if 'config.py' in changed_files:
+                    importlib.reload(config_mod)
+                if 'template_manager.py' in changed_files:
+                    importlib.reload(template_manager)
+                if 'vector_template_renderer.py' in changed_files or 'template_manager.py' in changed_files:
+                    importlib.reload(vector_template_renderer)
+                if 'renderer.py' in changed_files or 'vector_template_renderer.py' in changed_files or 'template_manager.py' in changed_files:
+                    importlib.reload(renderer_mod)
+
+                # Rebind globals used inside app.py
+                globals()['render_vector_template_pil'] = vector_template_renderer.render_vector_template_pil
+                globals()['get_template_element_labels'] = vector_template_renderer.get_template_element_labels
+                globals()['get_template_element_positions'] = vector_template_renderer.get_template_element_positions
+                globals()['set_template_element_position'] = vector_template_renderer.set_template_element_position
+                globals()['load_template_config'] = template_manager.load_template_config
+                globals()['save_template_config'] = template_manager.save_template_config
+                globals()['reset_template_config'] = template_manager.reset_template_config
+                globals()['CertificateRenderer'] = renderer_mod.CertificateRenderer
+                globals()['load_positions'] = renderer_mod.load_positions
+                globals()['save_positions'] = renderer_mod.save_positions
+
+                self.renderer = renderer_mod.CertificateRenderer()
+                print(f"[Hot-Reload] Reloaded modules for: {', '.join(changed_files)}")
+            except Exception as e:
+                print(f"[Hot-Reload] Module reload error (fix syntax and save again): {e}")
+                return
+
+        if 'custom_positions.json' in changed_files or py_changed:
+            self.admin_positions = load_positions()
+            if hasattr(self.renderer, 'reload_positions'):
+                self.renderer.reload_positions()
+            if hasattr(self, '_sync_admin_field_controls'):
+                self._sync_admin_field_controls()
+            if hasattr(self, '_refresh_admin_fields_table'):
+                self._refresh_admin_fields_table()
+
+        self.update_preview()
+        if hasattr(self, '_update_admin_preview') and self.admin_authenticated:
+            self._update_admin_preview()
+        if hasattr(self, '_active_tmpl_editor_refresh') and callable(self._active_tmpl_editor_refresh):
+            try:
+                self._active_tmpl_editor_refresh()
+            except Exception:
+                pass
 
     def _open_admin_portal(self):
         self.tabview.set("  🛠️ Admin  ")
@@ -1033,7 +1155,7 @@ class CertificateApp(ctk.CTk):
             self.ent_class_roll.bind("<KeyRelease>", lambda _: (self._auto_update_sl_no(), self.update_preview()))
 
     def _on_cert_type_change(self, val):
-        prev_data = self.get_current_form_data() if hasattr(self, 'ent_name') and self.ent_name else None
+        prev_data = self.get_current_form_data() if hasattr(self, 'ent_name') and self.ent_name else self._shared_form_data.copy()
         self.current_cert_type = val.lower()
         self._build_form_fields(preserve_data=prev_data)
         # Ensure active cert is checked in selective printing
@@ -1102,28 +1224,74 @@ class CertificateApp(ctk.CTk):
         if not sl:
             sl = compute_sl_no(self.current_cert_type, reg_no=reg, stream=stream, section=sec, class_roll=roll)
 
+        if not hasattr(self, '_shared_form_data'):
+            self._shared_form_data = {}
+
+        # Update shared form cache ONLY for fields currently present in the active form
+        if self.ent_sl is not None:
+            self._shared_form_data['sl_no'] = sl
+        if self.ent_name is not None:
+            self._shared_form_data['student_name'] = to_sentence_case(self.ent_name.get().strip())
+        if self.ent_father is not None:
+            self._shared_form_data['father_name'] = to_sentence_case(self.ent_father.get().strip())
+        if self.ent_mother is not None:
+            self._shared_form_data['mother_name'] = to_sentence_case(self.ent_mother.get().strip())
+        if self.ent_address is not None:
+            self._shared_form_data['address'] = to_sentence_case(self.ent_address.get().strip())
+        if self.opt_exam is not None:
+            self._shared_form_data['exam_name'] = self.opt_exam.get().split()[0]
+        if self.ent_year is not None:
+            self._shared_form_data['exam_year'] = self.ent_year.get().strip()
+        if self.ent_roll is not None:
+            self._shared_form_data['roll_no'] = self.ent_roll.get().strip()
+        if self.opt_grade is not None:
+            self._shared_form_data['grade'] = self.opt_grade.get().strip()
+        if self.ent_session is not None:
+            self._shared_form_data['session'] = self.ent_session.get().strip()
+        if self.ent_dob is not None:
+            self._shared_form_data['dob'] = clean_date_str(self.ent_dob.get().strip())
+        if self.ent_reg is not None:
+            self._shared_form_data['reg_no'] = self.ent_reg.get().strip()
+        if self.ent_result_date is not None:
+            self._shared_form_data['result_date'] = clean_date_str(self.ent_result_date.get().strip())
+        if self.ent_left_date is not None:
+            self._shared_form_data['left_date'] = clean_date_str(self.ent_left_date.get().strip())
+        if self.ent_pen is not None:
+            self._shared_form_data['pen_no'] = self.ent_pen.get().strip()
+        if self.ent_class is not None:
+            self._shared_form_data['class_name'] = self.ent_class.get()
+        if self.ent_stream is not None:
+            self._shared_form_data['stream'] = self.ent_stream.get()
+        if self.ent_section is not None:
+            self._shared_form_data['section'] = self.ent_section.get().strip()
+        if self.ent_class_roll is not None:
+            self._shared_form_data['class_roll_no'] = self.ent_class_roll.get().strip()
+        if self.ent_date is not None:
+            self._shared_form_data['issue_date'] = clean_date_str(self.ent_date.get().strip())
+
+        s = self._shared_form_data
         data = {
             'cert_type': self.current_cert_type,
-            'sl_no': sl,
-            'student_name': to_sentence_case(self.ent_name.get().strip()) if self.ent_name else '',
-            'father_name': to_sentence_case(self.ent_father.get().strip()) if self.ent_father else '',
-            'mother_name': to_sentence_case(self.ent_mother.get().strip()) if self.ent_mother else '',
-            'address': to_sentence_case(self.ent_address.get().strip()) if self.ent_address else '',
-            'exam_name': self.opt_exam.get().split()[0] if self.opt_exam else 'AISSCE',
-            'exam_year': self.ent_year.get().strip() if self.ent_year else '2024',
-            'roll_no': self.ent_roll.get().strip() if self.ent_roll else '',
-            'grade': self.opt_grade.get().strip() if self.opt_grade else '',
-            'session': self.ent_session.get().strip() if self.ent_session else '',
-            'dob': clean_date_str(self.ent_dob.get().strip()) if self.ent_dob else '',
-            'reg_no': self.ent_reg.get().strip() if self.ent_reg else '',
-            'result_date': clean_date_str(self.ent_result_date.get().strip()) if self.ent_result_date else '',
-            'left_date': clean_date_str(self.ent_left_date.get().strip()) if self.ent_left_date else '',
-            'pen_no': self.ent_pen.get().strip() if self.ent_pen else '',
-            'class_name': self.ent_class.get() if self.ent_class else '',
-            'stream': self.ent_stream.get() if self.ent_stream else '',
-            'section': self.ent_section.get().strip() if self.ent_section else '',
-            'class_roll_no': self.ent_class_roll.get().strip() if self.ent_class_roll else '',
-            'issue_date': clean_date_str(self.ent_date.get().strip()) if self.ent_date else datetime.now().strftime("%d/%m/%Y"),
+            'sl_no': sl if sl else s.get('sl_no', ''),
+            'student_name': s.get('student_name', ''),
+            'father_name': s.get('father_name', ''),
+            'mother_name': s.get('mother_name', ''),
+            'address': s.get('address', ''),
+            'exam_name': s.get('exam_name', 'AISSCE'),
+            'exam_year': s.get('exam_year', '2024'),
+            'roll_no': s.get('roll_no', ''),
+            'grade': s.get('grade', ''),
+            'session': s.get('session', ''),
+            'dob': s.get('dob', ''),
+            'reg_no': s.get('reg_no', ''),
+            'result_date': s.get('result_date', ''),
+            'left_date': s.get('left_date', ''),
+            'pen_no': s.get('pen_no', ''),
+            'class_name': s.get('class_name', ''),
+            'stream': s.get('stream', ''),
+            'section': s.get('section', ''),
+            'class_roll_no': s.get('class_roll_no', ''),
+            'issue_date': s.get('issue_date', datetime.now().strftime("%d/%m/%Y")),
             'status': 'qualified'
         }
         return data
@@ -1296,6 +1464,18 @@ class CertificateApp(ctk.CTk):
                 self.current_student_idx = self.batch_records.index(rec)
         else:
             return
+
+        # Cache full student record in _shared_form_data so switching certs preserves all fields
+        if not hasattr(self, '_shared_form_data'):
+            self._shared_form_data = {}
+        for k in (
+            'sl_no', 'student_name', 'father_name', 'mother_name', 'address',
+            'exam_name', 'exam_year', 'roll_no', 'grade', 'session', 'dob',
+            'reg_no', 'result_date', 'left_date', 'pen_no', 'class_name',
+            'stream', 'section', 'class_roll_no', 'issue_date'
+        ):
+            if rec.get(k):
+                self._shared_form_data[k] = rec.get(k)
 
         # If record specifies certificate type, switch to it if needed
         rec_type = (rec.get('cert_type') or '').lower()
@@ -4183,9 +4363,10 @@ class CertificateApp(ctk.CTk):
         add_foot_field("Principal Sign Title:", "principal_title", "Principal,")
         add_foot_field("Principal School Name:", "school_footer", "Mount Everest Hr. Sec. School")
 
-        # Working copy of positions for interactive drag & drop alignment
+        # Working copy of positions for interactive drag & drop alignment (both Candidate Fields & Vector Template Elements)
         tmpl_positions = copy.deepcopy(self.admin_positions if hasattr(self, 'admin_positions') and self.admin_positions else load_positions())
         selected_field = [None]
+        selected_kind = [None]  # 'field' or 'template'
         drag_data = {"start_x": 0, "start_y": 0, "field_start_x": 0, "field_start_y": 0, "active": False}
         editor_zoom = [0.0]  # 0.0 means Auto-Fit to container
         current_disp_size = [640, 480]
@@ -4206,37 +4387,50 @@ class CertificateApp(ctk.CTk):
             font=ctk.CTkFont(size=11, weight="bold")
         ).pack(side="left", padx=(8, 4))
 
-        field_var = ctk.StringVar(value="Select Field...")
+        field_var = ctk.StringVar(value="Select Element / Field...")
 
-        def get_field_label(c_k, f_key):
+        def get_field_label(c_k, f_key, kind=None):
+            if kind == 'template' or str(f_key).startswith('tmpl_'):
+                for k, lbl in get_template_element_labels(c_k):
+                    if k == f_key:
+                        return lbl
             for k, lbl, _ in FIELD_METADATA.get(c_k, []):
                 if k == f_key:
                     return lbl
             return f_key.replace('_', ' ').title()
 
-        def update_status_label(f_key, x, y):
+        def update_status_label(f_key, x, y, kind=None):
             c_k = active_cert_var.get().lower()
-            lbl = get_field_label(c_k, f_key)
+            lbl = get_field_label(c_k, f_key, kind=kind)
             lbl_coord_status.configure(
                 text=f"🎯 Selected: {lbl}  |  X = {int(x)}, Y = {int(y)}  |  💡 Drag to reposition or use arrow keys"
             )
 
         def on_field_dropdown_selected(val_label):
             c_k = active_cert_var.get().lower()
+            for k, lbl in get_template_element_labels(c_k):
+                if lbl == val_label:
+                    selected_field[0] = k
+                    selected_kind[0] = 'template'
+                    cur = get_template_element_positions(tmpl_cfg, c_k).get(k, (0, 0))
+                    update_status_label(k, cur[0], cur[1], kind='template')
+                    _render_live_canvas()
+                    return
             for k, lbl, _ in FIELD_METADATA.get(c_k, []):
                 if lbl == val_label:
                     selected_field[0] = k
+                    selected_kind[0] = 'field'
                     if not show_sample_var.get():
                         show_sample_var.set(True)
                     cur = tmpl_positions.get(c_k, {}).get(k, (0, 0))
-                    update_status_label(k, cur[0], cur[1])
+                    update_status_label(k, cur[0], cur[1], kind='field')
                     _render_live_canvas()
-                    break
+                    return
 
         opt_field_selector = ctk.CTkOptionMenu(
             r_top,
             variable=field_var,
-            width=175,
+            width=195,
             height=25,
             font=ctk.CTkFont(size=10),
             command=on_field_dropdown_selected
@@ -4245,16 +4439,17 @@ class CertificateApp(ctk.CTk):
 
         def refresh_field_dropdown():
             c_k = active_cert_var.get().lower()
-            meta = FIELD_METADATA.get(c_k, [])
-            labels = [lbl for _, lbl, _ in meta]
+            tmpl_labels = [lbl for _, lbl in get_template_element_labels(c_k)]
+            field_labels = [lbl for _, lbl, _ in FIELD_METADATA.get(c_k, [])]
+            labels = tmpl_labels + field_labels
             if labels:
                 opt_field_selector.configure(values=labels)
                 if selected_field[0]:
-                    field_var.set(get_field_label(c_k, selected_field[0]))
+                    field_var.set(get_field_label(c_k, selected_field[0], kind=selected_kind[0]))
                 else:
-                    field_var.set("Select Field...")
+                    field_var.set("Select Element / Field...")
             else:
-                opt_field_selector.configure(values=["-- No fields --"])
+                opt_field_selector.configure(values=["-- No elements --"])
 
         # Zoom Controls
         def editor_zoom_in():
@@ -4336,35 +4531,85 @@ class CertificateApp(ctk.CTk):
             click_img_y = ((cy - off_y) / disp_h) * IMG_H
 
             c_k = active_cert_var.get().lower()
-            cert_positions = tmpl_positions.get(c_k, {})
+
+            # 1. Check candidate data fields if sample overlay is enabled
             closest_field = None
-            min_dist = float("inf")
+            min_field_dist = float("inf")
+            if show_sample_var.get():
+                cert_positions = tmpl_positions.get(c_k, {})
+                for f_key, coords in cert_positions.items():
+                    if len(coords) == 2:
+                        fx, fy = coords
+                    elif len(coords) == 4:
+                        fx = (coords[0] + coords[2]) / 2.0
+                        fy = (coords[1] + coords[3]) / 2.0
+                    else:
+                        continue
+                    dist = (click_img_x - fx)**2 + (click_img_y - fy)**2
+                    if dist < min_field_dist:
+                        min_field_dist = dist
+                        closest_field = f_key
 
-            for f_key, coords in cert_positions.items():
-                if len(coords) == 2:
-                    fx, fy = coords
-                elif len(coords) == 4:
-                    fx = (coords[0] + coords[2]) / 2.0
-                    fy = (coords[1] + coords[3]) / 2.0
+            # 2. Check vector template elements
+            tmpl_epos = get_template_element_positions(tmpl_cfg, c_k)
+            closest_tmpl = None
+            min_tmpl_dist = float("inf")
+            for e_key, (ex, ey) in tmpl_epos.items():
+                if e_key.startswith('tmpl_row_'):
+                    # Body lines span horizontally from LEFT_X to RIGHT_X
+                    if 150 <= click_img_x <= 2850:
+                        dist = ((click_img_y - ey) * 1.5) ** 2
+                    else:
+                        dist = (click_img_x - ex)**2 + (click_img_y - ey)**2
+                elif e_key in ('tmpl_office', 'tmpl_school', 'tmpl_sub', 'tmpl_affiliation', 'tmpl_affiliation_no', 'tmpl_title', 'tmpl_wish'):
+                    # Centered headers/title span horizontally around center
+                    if abs(click_img_x - ex) <= 950:
+                        dist = ((click_img_y - (ey + 30)) * 1.5) ** 2
+                    else:
+                        dist = (click_img_x - ex)**2 + (click_img_y - ey)**2
                 else:
-                    continue
-                dist = (click_img_x - fx)**2 + (click_img_y - fy)**2
-                if dist < min_dist:
-                    min_dist = dist
-                    closest_field = f_key
+                    dist = (click_img_x - ex)**2 + (click_img_y - ey)**2
+                if dist < min_tmpl_dist:
+                    min_tmpl_dist = dist
+                    closest_tmpl = e_key
 
-            if closest_field and min_dist < (380 ** 2):
+            # Pick candidate field if clicked close to one (within 180px) and closer than template element,
+            # otherwise pick vector template element
+            if closest_field and min_field_dist < (180 ** 2) and min_field_dist <= min_tmpl_dist:
                 selected_field[0] = closest_field
-                if not show_sample_var.get():
-                    show_sample_var.set(True)
-                field_var.set(get_field_label(c_k, closest_field))
-                cur_coords = cert_positions.get(closest_field, (0, 0))
+                selected_kind[0] = 'field'
+                field_var.set(get_field_label(c_k, closest_field, kind='field'))
+                cur_coords = tmpl_positions.get(c_k, {}).get(closest_field, (0, 0))
                 drag_data["start_x"] = cx
                 drag_data["start_y"] = cy
                 drag_data["field_start_x"] = cur_coords[0]
                 drag_data["field_start_y"] = cur_coords[1]
                 drag_data["active"] = True
-                update_status_label(closest_field, cur_coords[0], cur_coords[1])
+                update_status_label(closest_field, cur_coords[0], cur_coords[1], kind='field')
+                _render_live_canvas()
+            elif closest_tmpl and min_tmpl_dist < (280 ** 2):
+                selected_field[0] = closest_tmpl
+                selected_kind[0] = 'template'
+                field_var.set(get_field_label(c_k, closest_tmpl, kind='template'))
+                cur_coords = tmpl_epos.get(closest_tmpl, (0, 0))
+                drag_data["start_x"] = cx
+                drag_data["start_y"] = cy
+                drag_data["field_start_x"] = cur_coords[0]
+                drag_data["field_start_y"] = cur_coords[1]
+                drag_data["active"] = True
+                update_status_label(closest_tmpl, cur_coords[0], cur_coords[1], kind='template')
+                _render_live_canvas()
+            elif closest_field and min_field_dist < (380 ** 2):
+                selected_field[0] = closest_field
+                selected_kind[0] = 'field'
+                field_var.set(get_field_label(c_k, closest_field, kind='field'))
+                cur_coords = tmpl_positions.get(c_k, {}).get(closest_field, (0, 0))
+                drag_data["start_x"] = cx
+                drag_data["start_y"] = cy
+                drag_data["field_start_x"] = cur_coords[0]
+                drag_data["field_start_y"] = cur_coords[1]
+                drag_data["active"] = True
+                update_status_label(closest_field, cur_coords[0], cur_coords[1], kind='field')
                 _render_live_canvas()
             else:
                 drag_data["active"] = False
@@ -4390,7 +4635,11 @@ class CertificateApp(ctk.CTk):
             new_y = int(round(max(0, min(IMG_H, drag_data["field_start_y"] + delta_img_y))))
 
             c_k = active_cert_var.get().lower()
-            if c_k in tmpl_positions and selected_field[0] in tmpl_positions[c_k]:
+            if selected_kind[0] == 'template':
+                set_template_element_position(tmpl_cfg, c_k, selected_field[0], new_x, new_y)
+                update_status_label(selected_field[0], new_x, new_y, kind='template')
+                _render_live_canvas()
+            elif c_k in tmpl_positions and selected_field[0] in tmpl_positions[c_k]:
                 coords = tmpl_positions[c_k][selected_field[0]]
                 if len(coords) == 4:
                     x_len = coords[2] - coords[0]
@@ -4398,7 +4647,7 @@ class CertificateApp(ctk.CTk):
                     tmpl_positions[c_k][selected_field[0]] = (new_x, new_y, new_x + x_len, new_y + y_len)
                 else:
                     tmpl_positions[c_k][selected_field[0]] = (new_x, new_y)
-                update_status_label(selected_field[0], new_x, new_y)
+                update_status_label(selected_field[0], new_x, new_y, kind='field')
                 _render_live_canvas()
 
         def on_canvas_release(event):
@@ -4416,9 +4665,18 @@ class CertificateApp(ctk.CTk):
             if not selected_field[0]:
                 return
             c_k = active_cert_var.get().lower()
+            mult = 5 if (event.state & 0x0001) else 1
+            if selected_kind[0] == 'template':
+                cur_x, cur_y = get_template_element_positions(tmpl_cfg, c_k).get(selected_field[0], (0, 0))
+                new_x = int(round(max(0, min(IMG_W, cur_x + dx_sign * mult))))
+                new_y = int(round(max(0, min(IMG_H, cur_y + dy_sign * mult))))
+                set_template_element_position(tmpl_cfg, c_k, selected_field[0], new_x, new_y)
+                update_status_label(selected_field[0], new_x, new_y, kind='template')
+                _render_live_canvas()
+                return
+
             if c_k not in tmpl_positions or selected_field[0] not in tmpl_positions[c_k]:
                 return
-            mult = 5 if (event.state & 0x0001) else 1
             coords = tmpl_positions[c_k][selected_field[0]]
             cur_x, cur_y = coords[0], coords[1]
             new_x = int(round(max(0, min(IMG_W, cur_x + dx_sign * mult))))
@@ -4429,7 +4687,7 @@ class CertificateApp(ctk.CTk):
                 tmpl_positions[c_k][selected_field[0]] = (new_x, new_y, new_x + x_len, new_y + y_len)
             else:
                 tmpl_positions[c_k][selected_field[0]] = (new_x, new_y)
-            update_status_label(selected_field[0], new_x, new_y)
+            update_status_label(selected_field[0], new_x, new_y, kind='field')
             _render_live_canvas()
 
         win.bind("<Left>", lambda e: nudge_field(-1, 0, e))
@@ -4482,6 +4740,8 @@ class CertificateApp(ctk.CTk):
         def _render_live_canvas():
             c_k = active_cert_var.get().lower()
             try:
+                hl_field = selected_field[0] if selected_kind[0] == 'field' else None
+                hl_tmpl = selected_field[0] if selected_kind[0] == 'template' else None
                 if show_sample_var.get():
                     sample_d = ADMIN_SAMPLE_DATA.get(c_k, {}).copy()
                     img = self.renderer.render_pil(
@@ -4489,13 +4749,17 @@ class CertificateApp(ctk.CTk):
                         mode='full',
                         cert_type=c_k,
                         config=self.config,
-                        highlight_field=selected_field[0],
-                        show_crosshairs=bool(selected_field[0]),
+                        highlight_field=hl_field,
+                        show_crosshairs=bool(hl_field),
                         custom_positions_override=tmpl_positions,
-                        custom_template_config=tmpl_cfg
+                        custom_template_config=tmpl_cfg,
+                        highlight_template_element=hl_tmpl
                     )
                 else:
-                    img = render_vector_template_pil(c_k, self.renderer, custom_tmpl_cfg=tmpl_cfg)
+                    img = render_vector_template_pil(
+                        c_k, self.renderer, custom_tmpl_cfg=tmpl_cfg,
+                        highlight_element=hl_tmpl
+                    )
 
                 win.update_idletasks()
                 avail_w = canvas_container.winfo_width() or 640
@@ -4537,6 +4801,7 @@ class CertificateApp(ctk.CTk):
             active_cert_var.set(val)
             c_k = val.lower()
             selected_field[0] = None
+            selected_kind[0] = None
             refresh_field_dropdown()
             lbl_coord_status.configure(
                 text="💡 Click & drag any field on preview to reposition. Arrow keys (← ↑ → ↓) nudge 1px (Shift+arrow 5px)."
@@ -4559,6 +4824,7 @@ class CertificateApp(ctk.CTk):
         seg_cert.pack(side="left")
 
         refresh_field_dropdown()
+        self._active_tmpl_editor_refresh = lambda: win.winfo_exists() and _render_live_canvas()
         win.after(100, _render_live_canvas)
 
         # Bottom Action Bar

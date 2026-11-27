@@ -3,27 +3,27 @@
     "header": {
         "office_title": "OFFICE OF THE PRINCIPAL",
         "office_font": "Times New Roman",
-        "office_size": 11.0,
+        "office_size": 14.0,
         "school_name": "MOUNT EVEREST HIGHER SECONDARY SCHOOL",
         "school_font": "Times New Roman",
         "school_size": 22.0,
         "sub_title": "Taphou, Senapati - 795106, Manipur",
         "sub_font": "Times New Roman",
-        "sub_size": 10.0,
+        "sub_size": 13.0,
         "affiliation_line": "Affiliated to Central Board of Secondary Education, New Delhi",
-        "affiliation_font": "CommercialScriptBT",
-        "affiliation_size": 16.0,
+        "affiliation_font": "Souvenir",
+        "affiliation_size": 18.0,
         "affiliation_no": "Affiliation No. 1230048",
         "affiliation_no_font": "Times New Roman",
-        "affiliation_no_size": 12.0,
+        "affiliation_no_size": 14.0,
         "sl_label": "Sl. No.",
         "affiliation_no_no": ""
     },
     "body_font": "Times New Roman",
-    "body_size": 11.0,
+    "body_size": 14.0,
     "footer": {
         "footer_font": "Times New Roman",
-        "footer_size": 11.0,
+        "footer_size": 14.0,
         "date_prefix": "Dated, Senapati",
         "date_label": "The",
         "principal_title": "Principal,",
@@ -33,7 +33,7 @@
         "provisional": {
             "title": "Provisional Certificate",
             "title_font": "Times New Roman",
-            "title_size": 18.0,
+            "title_size": 20.0,
             "line_certify": "This is to certify that Mr/Miss",
             "line_parents": "S/o, D/o Mr.",
             "line_mother": "& Mrs.",
@@ -61,25 +61,41 @@
                 "His/her date of birth according to the school admission record is",
                 "His/Her Registration Number with the CBSE is",
                 "The result of the said Examination was announced on"
-            ]
+            ],
+            "positions": {
+                "tmpl_title": [
+                    1526,
+                    743
+                ],
+                "tmpl_row_9": [
+                    230,
+                    1764
+                ]
+            }
         },
         "character": {
             "title": "Character Certificate",
             "title_font": "Times New Roman",
-            "title_size": 18.0,
+            "title_size": 20.0,
             "line_conduct": "This is to certify that the conduct and character of",
             "line_student_prefix": "Mr./Miss",
             "line_status": "disqualified the AISSE/AISSCE, 20",
             "line_board": "of Central Board of Secondary Education, New Delhi",
-            "line_placed": "was placed in the grade",
-            "line_nic": "As per CBSE result uploaded by National Informatics Centre (NIC), New Delhi is found",
-            "line_satisfactory": "satisfactory during the academic session 20",
-            "body_text": "This is to certify that the conduct and character of Mr./Miss {student_name} qualified/disqualified the AISSE/AISSCE, 20{exam_year} of Central Board of Secondary Education, New Delhi bearing Roll No. {roll_no} was placed in the grade {grade} As per CBSE result uploaded by National Informatics Centre (NIC), New Delhi is found satisfactory during the academic session 20{session}."
+            "line_placed": "was placed in the grade ............................As per CBSE result uploaded",
+            "line_nic": "by National Informatics Centre (NIC), New Delhi is found satisfactory during the",
+            "line_satisfactory": "academic session 20",
+            "body_text": "This is to certify that the conduct and character of Mr./Miss {student_name} qualified/disqualified the AISSE/AISSCE, 20{exam_year} of Central Board of Secondary Education, New Delhi bearing Roll No. {roll_no} was placed in the grade {grade} As per CBSE result uploaded by National Informatics Centre (NIC), New Delhi is found satisfactory during the academic session 20{session}.",
+            "positions": {
+                "tmpl_title": [
+                    1509,
+                    816
+                ]
+            }
         },
         "transfer": {
             "title": "Transfer Certificate",
             "title_font": "Times New Roman",
-            "title_size": 18.0,
+            "title_size": 20.0,
             "line_certify": "This is to certify that Mr/Miss",
             "line_parents": "S/o, D/o Mr.",
             "line_mother": "& Mrs.",
@@ -114,7 +130,7 @@
         "reading": {
             "title": "Reading Certificate",
             "title_font": "Times New Roman",
-            "title_size": 18.0,
+            "title_size": 20.0,
             "line_certify": "This is to certify that Mr/Miss",
             "line_parents": "S/o, D/o Mr.",
             "line_mother": "& Mrs.",
@@ -126,7 +142,41 @@
             "line_session": "of this School during the academic session 20",
             "line_dob": "His/Her date of birth as recorded in the school registered is",
             "line_character": "He/She bears a good moral character.",
-            "body_text": "This is to certify that Mr/Miss {student_name}\nS/o, D/o Mr. {father_name} & Mrs. {mother_name}\nan inhabitant of {address}\nis reading in class {class_name} Stream {stream} Section {section} bearing class Roll No. {class_roll_no} of this School during the academic session 20{session}.\nHis/Her date of birth as recorded in the school registered is {dob}\nHe/She bears a good moral character."
+            "body_text": "This is to certify that Mr/Miss {student_name}\nS/o, D/o Mr. {father_name} & Mrs. {mother_name}\nan inhabitant of {address}\nis reading in class {class_name} Stream {stream} Section {section} bearing class Roll No. {class_roll_no} of this School during the academic session 20{session}.\nHis/Her date of birth as recorded in the school registered is {dob}\nHe/She bears a good moral character.",
+            "positions": {
+                "tmpl_title": [
+                    1500,
+                    761
+                ]
+            }
         }
+    },
+    "header_positions": {
+        "tmpl_affiliation_no": [
+            1502,
+            539
+        ],
+        "tmpl_affiliation": [
+            1505,
+            452
+        ],
+        "tmpl_sub": [
+            1502,
+            379
+        ],
+        "tmpl_school": [
+            1500,
+            277
+        ],
+        "tmpl_office": [
+            1500,
+            202
+        ]
+    },
+    "footer_positions": {
+        "tmpl_principal_block": [
+            2462,
+            1908
+        ]
     }
 }

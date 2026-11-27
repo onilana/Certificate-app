@@ -70,9 +70,9 @@ DEFAULT_TEMPLATE_CONFIG = {
             "line_student_prefix": "Mr./Miss",
             "line_status": "qualified/disqualified the AISSE/AISSCE, 20",
             "line_board": "of Central Board of Secondary Education, New Delhi bearing Roll No.",
-            "line_placed": "was placed in the grade",
-            "line_nic": "As per CBSE result uploaded by National Informatics Centre (NIC), New Delhi is found",
-            "line_satisfactory": "satisfactory during the academic session 20"
+            "line_placed": "was placed in the grade ............................As per CBSE result uploaded",
+            "line_nic": "by National Informatics Centre (NIC), New Delhi is found satisfactory during the",
+            "line_satisfactory": "academic session 20"
         },
         "transfer": {
             "title": "Transfer Certificate",
@@ -146,6 +146,10 @@ def load_template_config() -> dict:
                         except Exception: pass
                     if 'use_editable_template' in saved:
                         cfg['use_editable_template'] = bool(saved['use_editable_template'])
+                    if 'header_positions' in saved and isinstance(saved['header_positions'], dict):
+                        cfg['header_positions'] = saved['header_positions']
+                    if 'footer_positions' in saved and isinstance(saved['footer_positions'], dict):
+                        cfg['footer_positions'] = saved['footer_positions']
         except Exception as e:
             print(f"Error loading template config: {e}")
     else:
