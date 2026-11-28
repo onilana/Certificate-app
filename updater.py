@@ -130,7 +130,15 @@ def check_for_updates(config: dict) -> dict:
 
 
 def download_file(url_or_path: str, dest_path: str, progress_callback=None):
-    """Downloads or copies update file with optional progress callback(percent)."""
+    """Downloads or copies update file with optional progress callback(percent, downloaded, total)."""
+    def _notify(pct, dl, tot):
+        if not progress_callback:
+            return
+        try:
+            progress_callback(pct, dl, tot)
+        except TypeError:
+            progress_callback(pct)
+
     # If it's a local or network file path
     if os.path.isfile(url_or_path):
         total_size = os.path.getsize(url_or_path)
@@ -143,11 +151,11 @@ def download_file(url_or_path: str, dest_path: str, progress_callback=None):
                     break
                 fdst.write(chunk)
                 copied += len(chunk)
-                if progress_callback and total_size > 0:
-                    pct = min(100, int((copied / total_size) * 100))
-                    progress_callback(pct)
-        if progress_callback:
-            progress_callback(100)
+                if total_size > 0:
+                    _notify(min(100, int((copied / total_size) * 100)), copied, total_size)
+                else:
+                    _notify(-1, copied, 0)
+        _notify(100, copied, total_size or copied)
         return
 
     # HTTP / HTTPS download
@@ -167,14 +175,14 @@ def download_file(url_or_path: str, dest_path: str, progress_callback=None):
                     break
                 f.write(chunk)
                 downloaded += len(chunk)
-                if progress_callback and total_size > 0:
-                    pct = min(100, int((downloaded / total_size) * 100))
-                    progress_callback(pct)
-        if progress_callback:
-            progress_callback(100)
+                if total_size > 0:
+                    _notify(min(100, int((downloaded / total_size) * 100)), downloaded, total_size)
+                else:
+                    _notify(-1, downloaded, 0)
+        _notify(100, downloaded, total_size or downloaded)
 
 
-def apply_update_from_zip(zip_path: str, is_frozen: bool, base_dir: str):
+def apply_update_from_zip(zip_path: str, is_frozen: bool, base_dir: str, exit_callback=None):
     """
     Extracts update zip into a temporary staging folder, creates a self-executing
     helper batch script, launches it in a separate process, and exits the application
@@ -189,7 +197,7 @@ def apply_update_from_zip(zip_path: str, is_frozen: bool, base_dir: str):
     with zipfile.ZipFile(zip_path, 'r') as zf:
         zf.extractall(stage_dir)
 
-    # If the zip extracted into a single root folder (e.g. CertificateStudio/...)
+    # If the zip extracted into a single root folder (e.g. CertificateStudio/ or Certificate-app-main/)
     subitems = os.listdir(stage_dir)
     if len(subitems) == 1 and os.path.isdir(os.path.join(stage_dir, subitems[0])):
         nested_dir = os.path.join(stage_dir, subitems[0])
@@ -197,6 +205,16 @@ def apply_update_from_zip(zip_path: str, is_frozen: bool, base_dir: str):
         for item in os.listdir(nested_dir):
             shutil.move(os.path.join(nested_dir, item), os.path.join(stage_dir, item))
         os.rmdir(nested_dir)
+
+    # If running as frozen .exe and zip came from GitHub repo archive containing dist/CertificateStudio/
+    dist_exe_dir = os.path.join(stage_dir, "dist", "CertificateStudio")
+    if is_frozen and os.path.isdir(dist_exe_dir) and os.path.exists(os.path.join(dist_exe_dir, "CertificateStudio.exe")):
+        temp_dist = os.path.join(base_dir, "_update_dist_tmp")
+        if os.path.exists(temp_dist):
+            shutil.rmtree(temp_dist, ignore_errors=True)
+        shutil.move(dist_exe_dir, temp_dist)
+        shutil.rmtree(stage_dir, ignore_errors=True)
+        shutil.move(temp_dist, stage_dir)
 
     # Protect user data in stage_dir: Remove any file from stage_dir that would overwrite user's DB / config
     for pf in PRESERVED_USER_FILES:
@@ -257,8 +275,16 @@ exit
         close_fds=True
     )
 
-    # Terminate current app cleanly
-    sys.exit(0)
+    # Terminate current app cleanly so file locks are released immediately
+    if callable(exit_callback):
+        try:
+            exit_callback()
+            return
+        except SystemExit:
+            pass
+        except Exception:
+            pass
+    os._exit(0)
 
 
 def create_update_package(new_version: str, changelog: str, target_output_dir: str) -> tuple[str, str]:

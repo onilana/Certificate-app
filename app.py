@@ -3905,29 +3905,50 @@ class CertificateApp(ctk.CTk):
         ).pack(anchor="w", padx=14, pady=(0, 14))
 
     def _start_online_update_flow(self, info, progress_bar, status_lbl, btn_download, parent_win):
-        """Downloads and applies update over internet or network."""
+        """Downloads and applies update in-app over internet or network without opening a browser."""
         import threading
         btn_download.configure(state="disabled", text="Downloading update...")
         progress_bar.pack(fill="x", padx=14, pady=(4, 10))
+        progress_bar.configure(mode="determinate")
         progress_bar.set(0.0)
-        status_lbl.configure(text="Connecting to update source...")
+        status_lbl.configure(text="Connecting to update source...", text_color=("#2563EB", "#3B82F6"))
 
         def worker():
             temp_zip = os.path.join(get_base_dir(), "update_package.zip")
-            def on_progress(pct):
-                self.after(0, lambda: progress_bar.set(pct / 100.0))
-                self.after(0, lambda: status_lbl.configure(text=f"Downloading update: {pct}%"))
+            def on_progress(pct, dl=0, tot=0):
+                if pct >= 0:
+                    def _upd(p=pct):
+                        progress_bar.configure(mode="determinate")
+                        progress_bar.set(p / 100.0)
+                        status_lbl.configure(text=f"Downloading update in app: {p}%")
+                    self.after(0, _upd)
+                else:
+                    mb = dl / (1024 * 1024)
+                    def _upd_ind(m=mb):
+                        progress_bar.configure(mode="indeterminate")
+                        progress_bar.start()
+                        status_lbl.configure(text=f"Downloading update in app... ({m:.1f} MB)")
+                    self.after(0, _upd_ind)
 
             try:
                 updater.download_file(info['download_url'], temp_zip, progress_callback=on_progress)
-                self.after(0, lambda: status_lbl.configure(text="Download complete! Applying update..."))
-                is_frozen = getattr(sys, 'frozen', False)
-                base_dir = get_base_dir()
-                self.after(500, lambda: updater.apply_update_from_zip(temp_zip, is_frozen, base_dir))
+                def _apply():
+                    progress_bar.stop()
+                    progress_bar.configure(mode="determinate")
+                    progress_bar.set(1.0)
+                    status_lbl.configure(text="✅ Download complete! Installing update & relaunching...", text_color="#059669")
+                    is_frozen = getattr(sys, 'frozen', False)
+                    base_dir = get_base_dir()
+                    self.after(400, lambda: updater.apply_update_from_zip(temp_zip, is_frozen, base_dir, exit_callback=self.exit_application))
+                self.after(0, _apply)
             except Exception as e:
-                self.after(0, lambda: btn_download.configure(state="normal", text="🚀 Download & Install Update"))
-                self.after(0, lambda: status_lbl.configure(text=f"❌ Download failed: {e}"))
-                self.after(0, lambda: messagebox.showerror("Update Error", f"Failed to download update:\n{e}", parent=parent_win))
+                err_msg = str(e)
+                def _err(msg=err_msg):
+                    progress_bar.stop()
+                    btn_download.configure(state="normal", text="🚀 Download & Install Update")
+                    status_lbl.configure(text=f"❌ Download failed: {msg}", text_color="#DC2626")
+                    messagebox.showerror("Update Error", f"Failed to download update:\n{msg}", parent=parent_win)
+                self.after(0, _err)
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -3955,7 +3976,7 @@ class CertificateApp(ctk.CTk):
         try:
             is_frozen = getattr(sys, 'frozen', False)
             base_dir = get_base_dir()
-            updater.apply_update_from_zip(zip_path, is_frozen, base_dir)
+            updater.apply_update_from_zip(zip_path, is_frozen, base_dir, exit_callback=self.exit_application)
         except Exception as e:
             messagebox.showerror("Update Failed", f"Could not apply update:\n{e}", parent=parent_win or self)
 
