@@ -23,7 +23,7 @@
     "output_dir": "D:\\Certificate app\\Output_Certificates",
     "admin_password": "1234",
     "auto_check_updates": true,
-    "update_url": "https://raw.githubusercontent.com/MountEverestHSS/CertificateStudio/main/version.json",
+    "update_url": "https://raw.githubusercontent.com/onilana/Certificate-app/main/version.json",
     "update_network_folder": "",
     "use_editable_template": true,
     "sl_prefix": "MEHSS/2026/"

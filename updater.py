@@ -282,6 +282,7 @@ def create_update_package(new_version: str, changelog: str, target_output_dir: s
         '__pycache__',
         'build',
         'dist',
+        'previews',
         '.pytest_cache',
         'update_package.zip',
         '_update_staged',

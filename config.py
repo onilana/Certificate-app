@@ -30,10 +30,12 @@ DEFAULT_CONFIG = {
     "output_dir": DEFAULT_OUTPUT_DIR,
     "admin_password": "1234",
     "auto_check_updates": True,
-    "update_url": "https://raw.githubusercontent.com/MountEverestHSS/CertificateStudio/main/version.json",
+    "update_url": "https://raw.githubusercontent.com/onilana/Certificate-app/main/version.json",
     "update_network_folder": "",
     "use_editable_template": True
 }
+
+OLD_PLACEHOLDER_UPDATE_URL = "https://raw.githubusercontent.com/MountEverestHSS/CertificateStudio/main/version.json"
 
 def load_config():
     if os.path.exists(CONFIG_FILE):
@@ -42,6 +44,9 @@ def load_config():
                 data = json.load(f)
                 config = DEFAULT_CONFIG.copy()
                 config.update(data)
+                # Auto-migrate old placeholder update_url to actual GitHub repo
+                if not config.get("update_url") or config.get("update_url") == OLD_PLACEHOLDER_UPDATE_URL:
+                    config["update_url"] = DEFAULT_CONFIG["update_url"]
                 return config
         except Exception as e:
             print(f"Error loading config: {e}")
